@@ -4,8 +4,11 @@
  *  Googleカレンダーの予定を取得して、スプレッドシートに反映する機能だけを
  *  Shift.gs から切り出した単独スクリプト。
  *
+ *  取得結果は「日付ごとに1枚のシート」に分けて出力する。
+ *  （シート名は「貼り付け先シート名_yyyy-MM-dd」）
+ *
  *  対応している設定（すべて「カレンダー設定」シートで指定）:
- *    - 取得結果の貼り付け先（シート名・開始セル）
+ *    - 取得結果の貼り付け先（シート名＝各日シートの基準名・開始セル）
  *    - 出力の向き（縦向き / 横向き）
  *    - 取得期間（開始日〜終了日）
  *    - 取得時間帯（開始時刻・終了時刻・時間刻み）
@@ -100,7 +103,7 @@ function createCalendarConfigSheet() {
   );
 
   // 補足メモ
-  sheet.getRange(2, 3).setValue('例: カレンダー出力').setFontColor('#999999');
+  sheet.getRange(2, 3).setValue('例: カレンダー出力（日付ごとに「_yyyy-MM-dd」を付けたシートを作成）').setFontColor('#999999');
   sheet.getRange(3, 3).setValue('例: A1 / C3 など').setFontColor('#999999');
   sheet.getRange(4, 3).setValue('縦=時刻を行方向 / 横=時刻を列方向').setFontColor('#999999');
   sheet.getRange(5, 3).setValue('yyyy-MM-dd 形式').setFontColor('#999999');
@@ -162,34 +165,51 @@ function extractCalendarToSheet() {
     return;
   }
 
-  // 貼り付け先シートを用意
-  let outSheet = ss.getSheetByName(cfg.destSheetName);
-  if (!outSheet) outSheet = ss.insertSheet(cfg.destSheetName);
-
-  // 各日 × 各ユーザーの予定を取得
+  // 日ごとに1枚のシートを作成して書き込む
   const days = eachDate_(cfg.startDate, cfg.endDate);
-  const dayData = days.map(date => ({
-    date: date,
-    userSlots: cfg.users.map(u => buildSlotData_(fetchEvents_(u.email, date), timeSlots, date, cfg.fetchAllDay)),
-  }));
+  let firstSheet = null;
+  const sheetNames = [];
 
-  // 出力
-  const written = cfg.orientation === '横'
-    ? writeHorizontal_(outSheet, cfg, timeSlots, dayData)
-    : writeVertical_(outSheet, cfg, timeSlots, dayData);
+  days.forEach(date => {
+    // その日 × 各ユーザーの予定を取得（write関数は複数日対応なので配列で渡す）
+    const dayData = [{
+      date: date,
+      userSlots: cfg.users.map(u => buildSlotData_(fetchEvents_(u.email, date), timeSlots, date)),
+    }];
 
-  ss.setActiveSheet(outSheet);
+    // 貼り付け先シート（日付ごと）を用意
+    const sheetName = daySheetName_(cfg.destSheetName, date);
+    let outSheet = ss.getSheetByName(sheetName);
+    if (!outSheet) outSheet = ss.insertSheet(sheetName);
+
+    // 出力
+    if (cfg.orientation === '横') {
+      writeHorizontal_(outSheet, cfg, timeSlots, dayData);
+    } else {
+      writeVertical_(outSheet, cfg, timeSlots, dayData);
+    }
+
+    if (!firstSheet) firstSheet = outSheet;
+    sheetNames.push(sheetName);
+  });
+
+  if (firstSheet) ss.setActiveSheet(firstSheet);
   ui.alert(
     '完了',
     `カレンダーの予定を反映しました。\n` +
-    `・貼り付け先: ${cfg.destSheetName} / ${cfg.destCellA1}\n` +
+    `・貼り付け先: 日付ごとにシートを作成（${cfg.destCellA1} 起点）\n` +
     `・向き: ${cfg.orientation}向き\n` +
     `・期間: ${fmtDate_(cfg.startDate)} 〜 ${fmtDate_(cfg.endDate)}（${days.length}日）\n` +
     `・終日予定: ${cfg.fetchAllDay ? '別枠で取得' : '取得しない'}\n` +
     `・対象: ${cfg.users.length}名\n` +
-    `・出力範囲: ${written.rows}行 × ${written.cols}列`,
+    `・作成シート: ${sheetNames.join(', ')}`,
     ui.ButtonSet.OK
   );
+}
+
+/** 日付ごとの出力シート名（例: 「カレンダー出力_2026-07-01」） */
+function daySheetName_(base, date) {
+  return `${base}_` + Utilities.formatDate(date, 'JST', 'yyyy-MM-dd');
 }
 
 /** ===================== 設定読み込み ===================== */
