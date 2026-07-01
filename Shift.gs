@@ -111,7 +111,7 @@ FREE_TIME_TYPES.forEach(t => { FREE_TIME_TYPE_MAP[t.key] = t; });
  *  行1: 日付見出し
  *  行2: 列見出し1（時刻 / 名前 / シフト）
  *  行3: 列見出し2（予定）
- *  行4: 予定列側=日ごとの主担当フラグ / シフト列側=ロック行
+ *  行4: 予定列側=日ごとの主担当チェックボックス（その日で一番長い人）/ シフト列側=ロック行
  *  行5以降: 時刻スロット（9:00〜17:45）
  */
 const LOCK_ROW = 4;
@@ -1059,6 +1059,7 @@ function autoAssignShifts(preserveManual, options) {
       day.assignment.push(new Array(users.length).fill(''));
     }
     day.forcedCells = {}; // 'slot_col' => true（ロック列でも書き込むため記録）
+    day.fixedCells = {};  // 'slot_col' => true（最後の飛び飛びまとめで動かしてはいけないセル：既存/手動保持・カレンダー予定由来）
 
     // ===== 既存/ロックシフトの保持（各列はその列の本人専用） =====
     for (let s = 0; s < numSlots; s++) {
@@ -1070,6 +1071,7 @@ function autoAssignShifts(preserveManual, options) {
         const shouldPreserve = day.lockedCols[c] || preserveManual;
         if (!shouldPreserve) continue;
         day.assignment[s][c] = users[c].name;
+        day.fixedCells[s + '_' + c] = true; // 手動/既存シフトは最後のまとめでも動かさない
         userDailySlots[dayIdx][c]++;
         userTotalSlots[c]++;
       }
@@ -1087,6 +1089,7 @@ function autoAssignShifts(preserveManual, options) {
           if (day.assignment[s][uIdx]) return;         // 既に本人の列に入っていればOK
           day.assignment[s][uIdx] = users[uIdx].name;
           day.forcedCells[s + '_' + uIdx] = true;
+          day.fixedCells[s + '_' + uIdx] = true;       // カレンダー予定由来は最後のまとめでも動かさない
           userDailySlots[dayIdx][uIdx]++;
           userTotalSlots[uIdx]++;
           keywordSlotCount++;
@@ -2474,6 +2477,212 @@ function autoAssignShifts(preserveManual, options) {
     }
   }
 
+  // ===== 絶対カバー: 未カバーの時間帯が無くなるまで数周する =====
+  // 通常のカバー・最終手段でも埋まらない時間帯が残った場合、ここで何周かして必ず担当を入れる。
+  // 早い周はチーム1日上限(H2)を守り、それでも埋まらない周からはH2超過を許可する。
+  //  ・8h/日・終日予定・ロック列・管理者・週次非稼働・特定予定±1h・同時禁止相手・同時刻上限 は最後まで維持する。
+  //  ・8h/日や全員予定などで物理的に埋められない枠だけは、この後の「未カバー」警告に残す。
+  let guaranteedCoverCount = 0;
+  {
+    const maxD = getMaxHoursPerDaySlots_();
+    const maxPasses = numSlots + 4;
+    // 予定ベースの空き状況・対象者は各日固定なので、周回の外で一度だけ計算する。
+    const hardAvailByDay = daysData.map(day => computeAvailabilityMatrix(users, day, timeSlots, 0, false, true));
+    const eligibleByDay = daysData.map(day => users.map((u, i) => i).filter(i =>
+      !users[i].isAdmin &&
+      !day.lockedCols[i] &&
+      !isUserInactiveForDay_(day, i) &&
+      !day.userEvents[i].some(ev => isAllDayEventSafe(ev))
+    ));
+
+    for (let pass = 0; pass < maxPasses; pass++) {
+      const allowOverDailyCap = pass >= 2; // 3周目以降はチーム1日上限(H2)を超過してよい
+      let filledThisPass = false;
+      let anyUncovered = false;
+
+      daysData.forEach((day, dayIdx) => {
+        const hardAvail = hardAvailByDay[dayIdx];
+        const eligible = eligibleByDay[dayIdx];
+        if (eligible.length === 0) return;
+        const selfShiftAt = (u, x) => (x >= 0 && x < numSlots && !isLunchSlot[x] && day.assignment[x][u] === users[u].name);
+
+        for (let s = 0; s < numSlots; s++) {
+          if (isLunchSlot[s] || day.assignment[s].some(v => v)) continue;
+          anyUncovered = true;
+          const cands = eligible.filter(uIdx => {
+            if (day.assignment[s][uIdx]) return false;
+            if (!hardAvail[uIdx][s]) return false;                                        // 本人の実予定には重ねない（二重登録しない）
+            if (isSpecialBlockedSlot(day, uIdx, s)) return false;                         // 特定予定±1hは厳守
+            if (userDailySlots[dayIdx][uIdx] + 1 > maxD) return false;                    // 8h/日は維持
+            if (!allowOverDailyCap && sumArray(userDailySlots[dayIdx]) + 1 > dailyCapSlots) return false;
+            if (countOtherAssignedInSlot(day, uIdx, s) >= getMaxSameTimePeople_()) return false; // 空き枠なので実質0
+            if (slotHasForbiddenPartnerFor_(day, uIdx, s, users)) return false;           // 同時禁止相手
+            return true;
+          });
+          if (cands.length === 0) continue;
+          cands.sort((a, b) => {
+            const adjA = (selfShiftAt(a, s - 1) || selfShiftAt(a, s + 1)) ? 0 : 1;
+            const adjB = (selfShiftAt(b, s - 1) || selfShiftAt(b, s + 1)) ? 0 : 1;
+            if (adjA !== adjB) return adjA - adjB;                                          // 前後の自分のシフトと連続する人を優先
+            if (userDailySlots[dayIdx][a] !== userDailySlots[dayIdx][b]) return userDailySlots[dayIdx][a] - userDailySlots[dayIdx][b];
+            return userTotalSlots[a] - userTotalSlots[b];
+          });
+          const pick = cands[0];
+          day.assignment[s][pick] = users[pick].name;
+          day.forcedCells[s + '_' + pick] = true;
+          userDailySlots[dayIdx][pick]++;
+          userTotalSlots[pick]++;
+          guaranteedCoverCount++;
+          filledThisPass = true;
+        }
+      });
+
+      if (!anyUncovered) break;
+      if (!filledThisPass && allowOverDailyCap) break; // これ以上は8h/終日/ロック等の制約で埋められない
+    }
+    currentTotal = sumArray(userTotalSlots);
+  }
+
+  // ===== 主担当（その日で一番シフト時間が長い人）を決定する =====
+  // 表示（4行目・予定側のチェックボックス）と、次の「飛び飛びまとめ」で動かさない対象の判定に使う。
+  daysData.forEach((day, dayIdx) => {
+    let leadIdx = -1;
+    let leadSlots = -1;
+    for (let i = 0; i < users.length; i++) {
+      if (users[i].isAdmin) continue;
+      const slots = userDailySlots[dayIdx][i] || 0;
+      if (slots <= 0) continue;
+      // 同数の場合は、内部の主担当優先(mainLeadIdx)→予定が少ない→index順 で決める。
+      let better = slots > leadSlots;
+      if (!better && slots === leadSlots && leadIdx >= 0) {
+        const iIsLead = day.mainLeadIdx === i ? 0 : 1;
+        const cIsLead = day.mainLeadIdx === leadIdx ? 0 : 1;
+        if (iIsLead !== cIsLead) better = iIsLead < cIsLead;
+        else {
+          const bi = (day.busySlots && day.busySlots[i]) || 0;
+          const bc = (day.busySlots && day.busySlots[leadIdx]) || 0;
+          if (bi !== bc) better = bi < bc;
+        }
+      }
+      if (better) { leadSlots = slots; leadIdx = i; }
+    }
+    day.mainDisplayIdx = leadIdx; // 担当者がいない日は -1
+  });
+
+  // ===== 飛び飛びシフトの最終まとめ（主担当以外・カバー人数は変えない入れ替え） =====
+  // 各時間帯の合計人数（カバー）と各人の合計時間は一切変えずに、担当者を入れ替えて
+  // 各人のシフトができるだけ連続ブロックになるように調整する。
+  //  ・主担当（その日で一番長い人）・管理者・ロック列・カレンダー予定/手動で固定のセルは動かさない。
+  //  ・入れ替え先は本人が実際に空いている時間のみ。特定予定±1h・同時禁止相手は維持。
+  let defragSwapCount = 0;
+  {
+    const forbiddenMap = getForbiddenPartnersMap_(users);
+    daysData.forEach((day, dayIdx) => {
+      const leadIdx = day.mainDisplayIdx;
+      // 入れ替え先は「本人が実際に空いていて、かつ本人の稼働時間帯(G/H)内」の時間のみ。
+      const swapAvail = computeAvailabilityMatrix(users, day, timeSlots, 0, false, false);
+
+      const movable = (uIdx) =>
+        uIdx !== leadIdx && !users[uIdx].isAdmin && !day.lockedCols[uIdx];
+
+      // uIdx を x に置けるか（入れ替え先として妥当か）
+      const canOccupy = (uIdx, x) => {
+        if (x < 0 || x >= numSlots || isLunchSlot[x]) return false;
+        if (!swapAvail[uIdx][x]) return false;                 // 実際に空いている時間のみ
+        if (isSpecialBlockedSlot(day, uIdx, x)) return false;  // 特定予定±1hは厳守
+        return true;
+      };
+      // uIdx を x に置くと、x に残る他者と同時禁止に該当するか（excludeColは入れ替えで抜ける人）
+      const forbidWith = (uIdx, x, excludeCol) => {
+        const f = forbiddenMap[uIdx];
+        if (!f || f.size === 0) return false;
+        const row = day.assignment[x];
+        for (let c = 0; c < row.length; c++) {
+          if (c === uIdx || c === excludeCol) continue;
+          if (row[c] && f.has(c)) return true;
+        }
+        return false;
+      };
+      // uIdx の連続ブロック数（昼休み・空きで途切れる）
+      const blockCount = (uIdx) => {
+        let cnt = 0, inBlock = false;
+        for (let s = 0; s < numSlots; s++) {
+          const on = !isLunchSlot[s] && day.assignment[s][uIdx] === users[uIdx].name;
+          if (on && !inBlock) cnt++;
+          inBlock = on;
+        }
+        return cnt;
+      };
+      const isFixed = (uIdx, s) => day.fixedCells[s + '_' + uIdx] === true;
+      const onAt = (uIdx, s) => (s >= 0 && s < numSlots && !isLunchSlot[s] && day.assignment[s][uIdx] === users[uIdx].name);
+
+      let improved = true;
+      let guard = 0;
+      const guardMax = numSlots * users.length * 4 + 50;
+      while (improved && guard++ < guardMax) {
+        improved = false;
+
+        for (let a = 0; a < users.length && !improved; a++) {
+          if (!movable(a)) continue;
+          if (blockCount(a) <= 1) continue; // 既にまとまっている人は対象外
+
+          // A のブロック境界スロット（ここを手放すとブロックが縮む/消える）
+          const endpoints = [];
+          for (let s = 0; s < numSlots; s++) {
+            if (!onAt(a, s) || isFixed(a, s)) continue;
+            if (!onAt(a, s - 1) || !onAt(a, s + 1)) endpoints.push(s);
+          }
+          // A のブロックに隣接する空き列スロット（ここに入るとブロックが延びる/繋がる）
+          const extendSlots = [];
+          for (let s = 0; s < numSlots; s++) {
+            if (isLunchSlot[s] || onAt(a, s)) continue;
+            if (onAt(a, s - 1) || onAt(a, s + 1)) extendSlots.push(s);
+          }
+
+          for (let ei = 0; ei < endpoints.length && !improved; ei++) {
+            const s2 = endpoints[ei];
+            for (let xi = 0; xi < extendSlots.length && !improved; xi++) {
+              const s1 = extendSlots[xi];
+              if (s1 === s2) continue;
+              if (day.assignment[s1][a]) continue; // A は s1 に居ないこと
+              // s1 にいる入れ替え相手 B を探す
+              const row1 = day.assignment[s1];
+              for (let b = 0; b < users.length && !improved; b++) {
+                if (b === a || !row1[b]) continue;
+                if (!movable(b)) continue;
+                if (isFixed(b, s1)) continue;          // B の s1 が固定なら動かさない
+                if (isFixed(a, s2)) continue;          // A の s2 が固定なら動かさない
+                if (day.assignment[s2][b]) continue;   // B は s2 に居ないこと
+                if (!canOccupy(a, s1) || !canOccupy(b, s2)) continue;
+                if (forbidWith(a, s1, b) || forbidWith(b, s2, a)) continue;
+
+                const before = blockCount(a) + blockCount(b);
+                // 仮に入れ替え
+                day.assignment[s1][a] = users[a].name; day.assignment[s1][b] = '';
+                day.assignment[s2][b] = users[b].name; day.assignment[s2][a] = '';
+                const after = blockCount(a) + blockCount(b);
+                if (after < before) {
+                  // forcedCells の付け替え（見た目・整合のため）
+                  if (day.forcedCells[s2 + '_' + a]) { delete day.forcedCells[s2 + '_' + a]; day.forcedCells[s1 + '_' + a] = true; }
+                  else day.forcedCells[s1 + '_' + a] = true;
+                  if (day.forcedCells[s1 + '_' + b]) { delete day.forcedCells[s1 + '_' + b]; day.forcedCells[s2 + '_' + b] = true; }
+                  else day.forcedCells[s2 + '_' + b] = true;
+                  defragSwapCount++;
+                  improved = true;
+                } else {
+                  // 巻き戻し
+                  day.assignment[s1][a] = ''; day.assignment[s1][b] = users[b].name;
+                  day.assignment[s2][b] = ''; day.assignment[s2][a] = users[a].name;
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    currentTotal = sumArray(userTotalSlots);
+  }
+
   // ===== 同時禁止相手が、それでも同じ時間帯に同席していないか最終確認する =====
   // 自動割当ではペアにしないが、両者とも実際のカレンダー予定（シフト登録キーワード）で
   // 同時刻に登録された場合や、既存/ロックのシフトが手動で重なっている場合は同席が起こりうる。
@@ -2629,7 +2838,14 @@ function autoAssignShifts(preserveManual, options) {
   if (adjacentGapFillCount > 0) {
     msg += `1時間未満の穴の前後シフト吸収: ${(adjacentGapFillCount / 4).toFixed(2)}h\n`;
   }
-  msg += `全時間帯カバー: 非昼休みの各時間帯に最低1人（通常は1時間以上。1時間未満の穴は前後の既存シフトへ吸収）\n`;
+  if (guaranteedCoverCount > 0) {
+    msg += `絶対カバー（未カバーの時間帯を数周して強制的に充填）: ${(guaranteedCoverCount / 4).toFixed(2)}h（8h/日は維持。埋めるためチーム1日上限H2を超えた場合あり）\n`;
+  }
+  if (defragSwapCount > 0) {
+    msg += `飛び飛びシフトの最終まとめ（主担当以外・カバー人数と合計時間は維持したまま入れ替え）: ${defragSwapCount}回\n`;
+  }
+  msg += `全時間帯カバー: 非昼休みの各時間帯に最低1人（埋まらない枠は8h/日・終日予定・ロック等が原因。警告に表示）\n`;
+  msg += `主担当: その日で一番シフト時間が長い人を4行目・予定側のチェックボックスで自動チェック\n`;
   msg += `最小連続ブロック: ${(getMinBlockSlots_() / 4).toFixed(2)}h以上（自動配分・全時間帯カバー・1日下限）\n`;
   msg += `1日の担当者数: 原則${getMinPeoplePerDay_()}人以上 / 上限${getMaxPeoplePerDay_()}人（1人だけの日は2人目を追加。制約上不可なら警告）\n`;
   msg += `同時刻の担当者上限: ${getMaxSameTimePeople_()}人（${getMaxSameTimePeople_() + 1}人以上の同時被りを作らない。※カレンダー予定＝シフト登録キーワード由来の重複は対象外）\n`;
@@ -3070,7 +3286,8 @@ function writeConfirmedCellStyle_(sheet, isConfirmed) {
 }
 
 /**
- * 日付シートの4行目（予定列側）に、その日の主担当を表示する。
+ * 日付シートの4行目（予定列側）に、その日の主担当をチェックボックスで表示する。
+ * 主担当は「その日で一番シフト時間が長い人」を自動でチェックする（day.mainDisplayIdx）。
  * シフト列側の4行目はロックチェックボックスとして使うため触らない。
  */
 function writeDailyMainLeadFlag(day, users) {
@@ -3082,6 +3299,7 @@ function writeDailyMainLeadFlag(day, users) {
   flagRange.clearContent();
   flagRange.clearNote();
   flagRange.clearDataValidations();
+  flagRange.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
   flagRange
     .setBackground('#f3f3f3')
     .setFontColor('#666666')
@@ -3090,43 +3308,38 @@ function writeDailyMainLeadFlag(day, users) {
     .setVerticalAlignment('middle');
 
   sheet.getRange(LOCK_ROW, 1)
-    .setValue('主担当 / ロック')
+    .setValue('主担当✓ / ロック')
     .setBackground('#fce4d6')
     .setFontWeight('bold')
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
 
-  const leadIdx = (day.mainLeadIdx !== undefined && day.mainLeadIdx !== null) ? day.mainLeadIdx : -1;
+  // 主担当＝その日で一番シフト時間が長い人（day.mainDisplayIdx）。
+  // 未計算の日は従来の内部主担当(mainLeadIdx)にフォールバックする。
+  let leadIdx = (day.mainDisplayIdx !== undefined && day.mainDisplayIdx !== null) ? day.mainDisplayIdx : -1;
+  if (leadIdx < 0) leadIdx = (day.mainLeadIdx !== undefined && day.mainLeadIdx !== null) ? day.mainLeadIdx : -1;
+
+  const vals = new Array(users.length).fill(false);
+  if (leadIdx >= 0 && leadIdx < users.length) vals[leadIdx] = true;
+  flagRange.setValues([vals]);
+
   if (leadIdx < 0 || leadIdx >= users.length) {
-    sheet.getRange(LOCK_ROW, 1).setNote('この日は主担当を設定できませんでした（メイン担当1/2が未設定、終日予定、ロック、または週次担当の稼働メンバー制限など）。');
+    sheet.getRange(LOCK_ROW, 1).setNote('この日は主担当を設定できませんでした（担当者が割り当てられていません）。');
     return;
   }
 
   const lead = users[leadIdx];
-  const busySlots = day.busySlots || [];
-  const busyHours = (busySlots[leadIdx] || 0) / 4;
-  const weekNote = (day.weekLeadIdxOrder && day.weekLeadIdxOrder.indexOf(leadIdx) >= 0)
-    ? '週次担当シートで指定された主担当です。'
-    : 'メイン担当1/2のうち、予定が埋まっている時間が少ない方を自動選択しています。';
+  let note;
+  if (day.assignment) {
+    const leadSlots = day.assignment.reduce((acc, row) => acc + (row[leadIdx] === lead.name ? 1 : 0), 0);
+    note = `この日の主担当です（その日で一番シフト時間が長い人を自動でチェック）。シフト時間: ${(leadSlots / 4).toFixed(2)}h`;
+  } else {
+    note = 'この日の主担当（暫定）です。まだシフト未割当のため、メイン担当1/2から仮選択しています。自動割当を実行すると、その日で一番シフト時間が長い人へ自動更新されます。';
+  }
 
-  const cell = sheet.getRange(LOCK_ROW, 2 + leadIdx);
-  cell.setValue('★主担当')
+  sheet.getRange(LOCK_ROW, 2 + leadIdx)
     .setBackground(lead.bgColor)
-    .setFontColor(lead.fontColor)
-    .setFontWeight('bold')
-    .setNote(`この日の主担当です。${weekNote} 予定時間: ${busyHours.toFixed(2)}h`);
-
-  // 主担当ではないメイン1/2にも、比較対象だったことが分かるよう薄く表示する。
-  users.forEach((user, idx) => {
-    if (idx === leadIdx || !isMain12(user)) return;
-    const busyH = ((busySlots[idx] || 0) / 4).toFixed(2);
-    sheet.getRange(LOCK_ROW, 2 + idx)
-      .setValue('メイン候補')
-      .setBackground('#eeeeee')
-      .setFontColor('#666666')
-      .setFontWeight('normal')
-      .setNote(`メイン担当1/2の候補です。この日の予定時間: ${busyH}h`);
-  });
+    .setNote(note);
 }
 
 function writeAssignmentsToSheet(day, users, timeSlots) {
@@ -3606,10 +3819,14 @@ function setupLayout(sheet, users, timeSlots, targetDate) {
     .setBackground('#eeeeee').setFontWeight('bold');
 
   const shiftCol1 = users.length + 2;
-  sheet.getRange(LOCK_ROW, 1).setValue('主担当 / ロック')
+  sheet.getRange(LOCK_ROW, 1).setValue('主担当✓ / ロック')
     .setBackground('#fce4d6').setFontWeight('bold').setHorizontalAlignment('center');
   if (users.length > 0) {
-    sheet.getRange(LOCK_ROW, 2, 1, users.length)
+    // 予定側の4行目は「主担当」チェックボックス（自動割当でその日一番長い人が自動チェックされる）
+    const leadRange = sheet.getRange(LOCK_ROW, 2, 1, users.length);
+    leadRange.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+    leadRange.setValues([new Array(users.length).fill(false)]);
+    leadRange
       .setBackground('#f3f3f3')
       .setFontColor('#666666')
       .setFontWeight('normal')
@@ -4312,8 +4529,29 @@ function createDocsSheet() {
     { type: 'bullet', text: '他に誰も1人目に入れない時のみ、最終手段としてメイン担当外を1人で入れることがある' },
     { type: 'bullet', text: '全員が予定で誰も入れない時間帯は、メイン担当1/2のうち、その日の予定が少ない主担当を優先する。時間指定の予定と重なってでも入れる。終日予定の人は必ず除外' },
     { type: 'bullet', text: 'メイン担当1と2は基本的に日を分ける。各日、予定が埋まっている時間の長さを比較して少ない方を主担当にする。1も2も入れない時のみ最後の保険としてメイン担当外' },
-    { type: 'bullet', text: '各日付シートの4行目（予定列側）に「★主担当」を表示する。主担当でないメイン1/2には「メイン候補」を薄く表示し、シフト列側の4行目は従来どおりロックチェックボックス' },
+    { type: 'bullet', text: '各日付シートの4行目（予定列側）は「主担当チェックボックス」。自動割当のたびに、その日で一番シフト時間が長い人へ自動でチェックが入る（下の「主担当（チェックボックス）」参照）。シフト列側の4行目は従来どおりロックチェックボックス' },
     { type: 'bullet', text: '全員予定の緊急強制カバーと、1人だけの日を避ける最終ペア追加では、予定時間(E)や月間目標(G2)を超える場合がある（結果ダイアログに表示）' },
+    { type: 'space' },
+
+    { type: 'h1', text: '■ 主担当（チェックボックス／その日で一番長い人）★NEW' },
+    { type: 'text', text: '各日付シートの4行目・予定列側は「主担当」チェックボックスです。自動割当を実行すると、その日で一番シフト時間が長い人に自動でチェックが入ります（同時間なら内部の主担当→予定が少ない→並び順で決定）。' },
+    { type: 'bullet', text: '表示は割当結果に連動。カレンダー反映だけの段階では、メイン担当1/2から仮選択して暫定チェックを付け、自動割当で正式に更新する' },
+    { type: 'bullet', text: '内部の割当優先順位（メイン1/2の日分けなど）は従来どおり。チェックボックスは「結果として一番長い人」を表示するもの' },
+    { type: 'space' },
+
+    { type: 'h1', text: '■ 絶対カバー（埋まらない日を作らない・数周）★NEW' },
+    { type: 'text', text: '通常のカバー・最終手段でも埋まらない時間帯が残った場合、最後に何周かして、実際に空いている担当者で全時間帯を強制的に充填します。' },
+    { type: 'bullet', text: '早い周はチーム1日上限(H2)を守り、それでも埋まらない周からはH2を超過して埋める（結果ダイアログに時間を表示）' },
+    { type: 'bullet', text: 'カバー最優先のため、予定時間(E)・月間目標(G2)を超える場合がある（従来の最終手段と同じ扱い）' },
+    { type: 'bullet', text: '1人1日8時間・終日予定・ロック列・管理者・週次非稼働・特定予定±1h・同時禁止相手・同時刻の担当者上限 は最後まで維持する' },
+    { type: 'bullet', text: '本人の実予定には重ねない（二重登録しない）。8時間到達や全員予定などで物理的に埋められない枠だけは、従来どおり警告に残す' },
+    { type: 'space' },
+
+    { type: 'h1', text: '■ 飛び飛びシフトの最終まとめ（主担当以外）★NEW' },
+    { type: 'text', text: '割当の最後に、各時間帯の合計人数（カバー）と各人の合計時間を一切変えずに、担当者を入れ替えて各人のシフトができるだけ連続ブロックになるよう調整します。' },
+    { type: 'bullet', text: '対象は主担当（その日で一番長い人）以外。主担当・管理者・ロック列・カレンダー予定/手動で固定のセルは動かさない' },
+    { type: 'bullet', text: '入れ替え先は本人が実際に空いていて稼働時間帯(G/H)内の時間のみ。特定予定±1h・同時禁止相手も維持' },
+    { type: 'bullet', text: 'カバー人数を変えない入れ替えのみのため、連続化できる範囲には限りがある（相手と交換できる場合だけまとまる）' },
     { type: 'space' },
 
     { type: 'h1', text: '■ 予定時間(E)の厳守' },
