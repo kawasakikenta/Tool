@@ -201,9 +201,19 @@ function autoAssignShiftsRange() {
   periodEnd.setDate(startDate.getDate() + daysToFetch - 1);
   const periodEndStr = Utilities.formatDate(periodEnd, 'JST', 'yyyy-MM-dd');
 
+  // 入力例は「対象期間の一部」を指定するイメージが伝わるように、
+  // 期間の全体（両端）ではなく期間内側の日付を例として提示する。
+  const exStart = new Date(startDate.getTime());
+  exStart.setDate(startDate.getDate() + Math.floor((daysToFetch - 1) / 4));
+  const exEnd = new Date(startDate.getTime());
+  exEnd.setDate(startDate.getDate() + Math.floor((daysToFetch - 1) * 3 / 4));
+  const exStartStr = Utilities.formatDate(exStart, 'JST', 'yyyy-MM-dd');
+  const exEndStr = Utilities.formatDate(exEnd, 'JST', 'yyyy-MM-dd');
+
   const res1 = ui.prompt(
     '指定期間だけ組みなおす（1/2）',
-    `組みなおす「開始日」を入力してください（例: ${periodStartStr}）\n対象期間: ${periodStartStr} 〜 ${periodEndStr}`,
+    `対象期間 ${periodStartStr} 〜 ${periodEndStr} のうち、組みなおしたい範囲の「開始日」を入力してください。\n` +
+    `（YYYY-MM-DD 形式・入力例: ${exStartStr}）`,
     ui.ButtonSet.OK_CANCEL
   );
   if (res1.getSelectedButton() !== ui.Button.OK) return;
@@ -215,7 +225,9 @@ function autoAssignShiftsRange() {
 
   const res2 = ui.prompt(
     '指定期間だけ組みなおす（2/2）',
-    `組みなおす「終了日」を入力してください（両端を含みます・例: ${periodEndStr}）\n対象期間: ${periodStartStr} 〜 ${periodEndStr}`,
+    `組みなおしたい範囲の「終了日」を入力してください（両端を含みます）。\n` +
+    `対象期間: ${periodStartStr} 〜 ${periodEndStr}\n` +
+    `（YYYY-MM-DD 形式・入力例: ${exEndStr}）`,
     ui.ButtonSet.OK_CANCEL
   );
   if (res2.getSelectedButton() !== ui.Button.OK) return;
@@ -5254,15 +5266,40 @@ function createUserAttributesSheet() {
     resetSimpleSheet_(sheet);
     sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
   } else {
-    // 旧レイアウト（「同時禁止相手」列が無い）の場合は、既存の「備考」データを壊さないよう
-    // 「備考」の直前に空の列を挿入してから新ヘッダーを書き込む。
-    const curHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h || '').trim());
-    if (curHeaders.indexOf('同時禁止相手') < 0) {
-      const noteIdx = curHeaders.indexOf('備考'); // 0-based
-      const insertAt = noteIdx >= 0 ? noteIdx + 1 : sheet.getLastColumn() + 1; // 1-based
-      sheet.insertColumnBefore(insertAt);
-    }
-    sheet.getRange(1, 1, 1, rows[0].length).setValues([rows[0]]);
+    // 既存シートのレイアウトが古い（スキル/1日上限/希望曜日/NG曜日 などの列が残っている、
+    // または「同時禁止相手」列が無い）場合、ヘッダー名で対応付けして現行の8列レイアウトへ
+    // 整列し直す。単に新ヘッダーを上書きすると、単独禁止などのデータが別の列に取り残されて
+    // 無視されてしまうため、必ずデータごと移動させる。
+    const lastCol = Math.max(sheet.getLastColumn(), rows[0].length);
+    const lastRow = sheet.getLastRow();
+    const curHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim());
+    const dataRows = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, lastCol).getValues() : [];
+    const srcIdx = (name) => curHeaders.indexOf(name);
+    // ヘッダー名で値を取得（見つからなければ位置フォールバック→既定値）。
+    const pick = (row, name, fallbackIdx, dflt) => {
+      let i = srcIdx(name);
+      if (i < 0) i = fallbackIdx;
+      const v = (i >= 0 && i < row.length) ? row[i] : undefined;
+      return (v === '' || v === undefined || v === null) ? dflt : v;
+    };
+    const migrated = dataRows.map(row => {
+      const fillI = srcIdx('補填対象');
+      const soloI = srcIdx('単独禁止');
+      return [
+        pick(row, '名前', 0, ''),
+        pick(row, 'メール', 1, ''),
+        pick(row, '役割', 2, '通常'),
+        pick(row, '優先度', 3, ''),
+        fillI >= 0 ? (row[fillI] !== false) : true,   // 補填対象（チェックボックス）
+        soloI >= 0 ? (row[soloI] === true) : false,   // 単独禁止（チェックボックス）
+        pick(row, '同時禁止相手', -1, ''),
+        pick(row, '備考', -1, ''),
+      ];
+    }).filter(r => String(r[1] || '').trim() !== '' || String(r[0] || '').trim() !== '');
+    // 古い列が残らないよう一度クリアしてから、整列済みデータで書き直す。
+    resetSimpleSheet_(sheet);
+    const out = [rows[0]].concat(migrated.length ? migrated : rows.slice(1));
+    sheet.getRange(1, 1, out.length, rows[0].length).setValues(out);
   }
   sheet.getRange(1, 1, 1, rows[0].length).setBackground('#674ea7').setFontColor('#ffffff').setFontWeight('bold');
   sheet.getRange(2, 3, Math.max(100, rows.length - 1), 1).setDataValidation(
@@ -5284,24 +5321,35 @@ function readUserAttributes_() {
   const sheet = ss.getSheetByName(USER_ATTRIBUTES_SHEET_NAME);
   const map = {};
   if (!sheet || sheet.getLastRow() < 2) return map;
-  const lastCol = Math.max(7, sheet.getLastColumn());
+  const lastCol = Math.max(8, sheet.getLastColumn());
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
-  // 旧レイアウト（備考が7列目）との互換: 「同時禁止相手」ヘッダーがある場合のみ7列目を相手として扱う。
+  // 列はヘッダー名で特定する（旧レイアウトで列がずれていても正しい値を読む）。
+  // ヘッダーが見つからない場合のみ現行レイアウトの既定位置にフォールバックする。
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim());
-  const forbidCol = headers.indexOf('同時禁止相手');
-  const noteCol = headers.indexOf('備考');
+  const col = (name, fallback) => {
+    const i = headers.indexOf(name);
+    return i >= 0 ? i : fallback;
+  };
+  const nameCol = col('名前', 0);
+  const emailCol = col('メール', 1);
+  const roleCol = col('役割', 2);
+  const priorityCol = col('優先度', 3);
+  const fillCol = col('補填対象', 4);
+  const noSoloCol = col('単独禁止', 5);
+  const forbidCol = col('同時禁止相手', -1);
+  const noteCol = col('備考', -1);
   values.forEach(row => {
-    const email = String(row[1] || '').trim().toLowerCase();
+    const email = String(row[emailCol] || '').trim().toLowerCase();
     if (!email) return;
     map[email] = {
-      name: String(row[0] || '').trim(),
+      name: String(row[nameCol] || '').trim(),
       email,
-      role: String(row[2] || '通常').trim(),
-      priority: Number(row[3]) || 999,
-      fillEligible: row[4] !== false,
-      noSolo: row[5] === true,
+      role: String(row[roleCol] || '通常').trim(),
+      priority: Number(row[priorityCol]) || 999,
+      fillEligible: row[fillCol] !== false,
+      noSolo: row[noSoloCol] === true,
       forbiddenPartnersRaw: forbidCol >= 0 ? String(row[forbidCol] || '').trim() : '',
-      note: noteCol >= 0 ? String(row[noteCol] || '').trim() : String(row[6] || '').trim(),
+      note: noteCol >= 0 ? String(row[noteCol] || '').trim() : '',
     };
   });
   return map;
@@ -5347,7 +5395,7 @@ function slotHasForbiddenPartnerFor_(day, uIdx, slotIdx, users) {
   return false;
 }
 
-/** 「ユーザー属性」シートで単独禁止(row[9]=true)が指定されているユーザーのindex集合を返す。 */
+/** 「ユーザー属性」シートで単独禁止（「単独禁止」列=true）が指定されているユーザーのindex集合を返す。 */
 function getNoSoloUserIdxSet_(users) {
   const attrs = readUserAttributes_();
   const set = new Set();
