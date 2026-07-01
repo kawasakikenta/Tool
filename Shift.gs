@@ -2816,6 +2816,112 @@ function autoAssignShifts(preserveManual, options) {
     currentTotal = sumArray(userTotalSlots);
   }
 
+  // ===== 短い孤立シフトの解消（最小連続ブロック未満の端数ブロックを延長 or 除外） =====
+  // 前後に自分のシフトが無い、最小連続ブロック(既定60分)未満の「短い孤立シフト」を最終的に無くす。
+  //  ・まず本人が実際に空いている前後スロットへ延長して、最小連続ブロック以上にできないか試す。
+  //  ・延長できない場合は端数のため外す（警告に出す）。
+  //  ・手動/既存/カレンダー予定由来の固定セル(fixedCells)・ロック列・管理者は対象外（実シフトは触らない）。
+  //  ・昼休みで途切れて見えるだけの連続ブロックは1つのブロックとして扱い、誤って外さない。
+  let shortBlockExtendedCount = 0;
+  let shortBlockRemovedCount = 0;
+  if (getRemoveShortIsolatedBlocks_()) {
+    const minBlock = getMinBlockSlots_();
+    if (minBlock > 1) {
+      const maxDShort = getMaxHoursPerDaySlots_();
+      daysData.forEach((day, dayIdx) => {
+        // 延長先は「本人が実際に空いていて、かつ本人の稼働時間帯(G/H)内」の時間のみ。
+        const extendAvail = computeAvailabilityMatrix(users, day, timeSlots, 0, false, false);
+
+        // uIdx の連続ブロック（昼休みは途切れとみなさず橋渡しする）を列挙する。
+        const buildBlocks = (uIdx) => {
+          const blocks = [];
+          let cur = null;
+          for (let s = 0; s < numSlots; s++) {
+            if (isLunchSlot[s]) continue; // 昼休みでは切らない
+            if (day.assignment[s][uIdx] === users[uIdx].name) {
+              if (!cur) cur = [];
+              cur.push(s);
+            } else if (cur) {
+              blocks.push(cur);
+              cur = null;
+            }
+          }
+          if (cur) blocks.push(cur);
+          return blocks;
+        };
+
+        const canExtendCell = (uIdx, x) => {
+          if (x < 0 || x >= numSlots || isLunchSlot[x]) return false;
+          if (day.assignment[x][uIdx]) return false;
+          if (!extendAvail[uIdx][x]) return false;                                   // 本人の実予定・稼働時間外には延ばさない
+          if (isSpecialBlockedSlot(day, uIdx, x)) return false;                      // 特定予定±1hは厳守
+          if (userDailySlots[dayIdx][uIdx] + 1 > maxDShort) return false;            // 8h/日は維持
+          if (countOtherAssignedInSlot(day, uIdx, x) >= getMaxSameTimePeople_()) return false; // 同時刻の人数上限
+          if (slotHasForbiddenPartnerFor_(day, uIdx, x, users)) return false;        // 同時禁止相手
+          return true;
+        };
+        const skipLunchRight = (from) => { let x = from + 1; while (x < numSlots && isLunchSlot[x]) x++; return x; };
+        const skipLunchLeft = (from) => { let x = from - 1; while (x >= 0 && isLunchSlot[x]) x--; return x; };
+
+        for (let uIdx = 0; uIdx < users.length; uIdx++) {
+          if (users[uIdx].isAdmin) continue;
+          if (day.lockedCols[uIdx]) continue;                // ロック列（手動固定）は触らない
+          if (isUserInactiveForDay_(day, uIdx)) continue;
+
+          buildBlocks(uIdx).forEach(block => {
+            if (block.length >= minBlock) return;            // 十分な長さのブロックは対象外
+            if (block.some(s => day.fixedCells[s + '_' + uIdx])) return; // 固定セルを含む実シフトは触らない
+
+            // まず前後へ延長して最小連続ブロック以上にできないか試す。
+            const added = [];
+            let curLen = block.length;
+            let lo = block[0];
+            let hi = block[block.length - 1];
+            let progress = true;
+            while (curLen < minBlock && progress) {
+              progress = false;
+              const r = skipLunchRight(hi);
+              if (r < numSlots && canExtendCell(uIdx, r)) {
+                day.assignment[r][uIdx] = users[uIdx].name;
+                day.forcedCells[r + '_' + uIdx] = true;
+                userDailySlots[dayIdx][uIdx]++; userTotalSlots[uIdx]++;
+                added.push(r); hi = r; curLen++; progress = true;
+                if (curLen >= minBlock) break;
+              }
+              const l = skipLunchLeft(lo);
+              if (l >= 0 && canExtendCell(uIdx, l)) {
+                day.assignment[l][uIdx] = users[uIdx].name;
+                day.forcedCells[l + '_' + uIdx] = true;
+                userDailySlots[dayIdx][uIdx]++; userTotalSlots[uIdx]++;
+                added.push(l); lo = l; curLen++; progress = true;
+              }
+            }
+
+            if (curLen >= minBlock) {
+              shortBlockExtendedCount += added.length;
+              return;                                        // 延長成功。孤立ではなくなった。
+            }
+
+            // 延長できなかった → 追加分を巻き戻し、端数の孤立ブロックを外す。
+            added.forEach(x => {
+              day.assignment[x][uIdx] = '';
+              delete day.forcedCells[x + '_' + uIdx];
+              userDailySlots[dayIdx][uIdx]--; userTotalSlots[uIdx]--;
+            });
+            block.forEach(s => {
+              day.assignment[s][uIdx] = '';
+              delete day.forcedCells[s + '_' + uIdx];
+              userDailySlots[dayIdx][uIdx]--; userTotalSlots[uIdx]--;
+              shortBlockRemovedCount++;
+            });
+            warnings.push(`${day.dateStr} ${timeSlots[block[0]]}〜${slotEndTime(timeSlots, block[block.length - 1])}: ${users[uIdx].name}さんの${block.length * 15}分の短い孤立シフトを、最小連続ブロック(${minBlock * 15}分)未満で前後にも延長できないため外しました（要確認）`);
+          });
+        }
+      });
+      currentTotal = sumArray(userTotalSlots);
+    }
+  }
+
   // ===== 同時禁止相手が、それでも同じ時間帯に同席していないか最終確認する =====
   // 自動割当ではペアにしないが、両者とも実際のカレンダー予定（シフト登録キーワード）で
   // 同時刻に登録された場合や、既存/ロックのシフトが手動で重なっている場合は同席が起こりうる。
@@ -2976,6 +3082,12 @@ function autoAssignShifts(preserveManual, options) {
   }
   if (defragSwapCount > 0) {
     msg += `飛び飛びシフトの最終まとめ（主担当以外・カバー人数と合計時間は維持したまま入れ替え）: ${defragSwapCount}回\n`;
+  }
+  if (shortBlockExtendedCount > 0) {
+    msg += `短い孤立シフトを前後へ延長して解消: ${(shortBlockExtendedCount / 4).toFixed(2)}h\n`;
+  }
+  if (shortBlockRemovedCount > 0) {
+    msg += `短い孤立シフトを除外（延長不可のため）: ${(shortBlockRemovedCount / 4).toFixed(2)}h（要確認。詳細は警告欄）\n`;
   }
   msg += `全時間帯カバー: 非昼休みの各時間帯に最低1人（埋まらない枠は8h/日・終日予定・ロック等が原因。警告に表示）\n`;
   msg += `主担当: その日で一番シフト時間が長い人を4行目・予定側のチェックボックスで自動チェック\n`;
@@ -4688,6 +4800,13 @@ function createDocsSheet() {
     { type: 'bullet', text: 'カバー人数を変えない入れ替えのみのため、連続化できる範囲には限りがある（相手と交換できる場合だけまとまる）' },
     { type: 'space' },
 
+    { type: 'h1', text: '■ 短い孤立シフトの解消 ★NEW' },
+    { type: 'text', text: '割当の最後に、最小連続ブロック(既定60分)未満で前後に自分のシフトが無い「短い孤立シフト（例: 30分だけ1人ぽつんと）」を無くします。運用設定シート「短い孤立シフトを解消」がONのとき有効（既定ON。OFFで従来どおり残します）。' },
+    { type: 'bullet', text: 'まず本人が実際に空いている前後の時間へ延長し、最小連続ブロック以上のまとまったシフトにできないか試す（8h/日・特定予定±1h・同時刻の担当者上限・同時禁止相手は維持）' },
+    { type: 'bullet', text: '前後に延長できず最小連続ブロックに届かない端数は、短い孤立シフトとして外し、警告に出す（要確認）' },
+    { type: 'bullet', text: '手動/既存/カレンダー予定由来で固定のセル・ロック列・管理者は対象外（実シフトは触らない）。昼休みで途切れて見えるだけの連続ブロックは1つとして扱い誤って外さない' },
+    { type: 'space' },
+
     { type: 'h1', text: '■ 予定時間(E)の厳守' },
     { type: 'text', text: 'ユーザーE列「予定時間(手入力)」は各人の月間目標で、自動シフトの上限として厳守します（その人の割当合計がEを超えないように配分）。' },
     { type: 'bullet', text: 'Eとカバー(最低1人)・1日下限がぶつかった時はEを優先。Eを守るために埋まらない時間帯は警告に出ます' },
@@ -5027,6 +5146,7 @@ function createOperationSettingsSheet() {
     ['不足強調時間', val('不足強調時間', DAILY_MIN_HOURS_HIGHLIGHT), '設定シート合計行や不足日レポートで不足判定する時間'],
     ['空き時間抽出: 実シフト優先キーワード', val('空き時間抽出: 実シフト優先キーワード', '【作業】鹿島_SES'), 'カンマ区切りで複数可。これらのキーワードを含む予定は、空き時間抽出で予定扱いせずシフト欄の有無を優先します（実シフト優先が既定動作）。例: 【作業】鹿島_SES'],
     ['最終フォールバック予定重複', val('最終フォールバック予定重複', 'ON'), 'ONなら最終手段で予定重複を許可。安全優先ではOFF推奨'],
+    ['短い孤立シフトを解消', val('短い孤立シフトを解消', 'ON'), 'ONなら最小連続ブロック未満で前後に自分のシフトが無い「短い孤立シフト」を、前後へ延長するか（延長できなければ）外して警告します。OFFで従来どおり残します'],
   ];
 
   sheet.getRange(1, 1, rows.length, 3).setValues(rows);
@@ -5041,6 +5161,7 @@ function createOperationSettingsSheet() {
   };
   setListValidation('割当モード', ['安全優先', '標準', 'カバー優先', '繁忙期', '研修期']);
   setListValidation('最終フォールバック予定重複', ['ON', 'OFF']);
+  setListValidation('短い孤立シフトを解消', ['ON', 'OFF']);
   sheet.setFrozenRows(1);
   sheet.setColumnWidth(1, 220);
   sheet.setColumnWidth(2, 220);
@@ -5069,6 +5190,7 @@ function getOperationConfig_() {
     freeTimeShiftPriorityKeywordText: '【作業】鹿島_SES',
     freeTimeShiftPriorityKeywords: parseKeywordList('【作業】鹿島_SES'),
     finalFallbackAllowEventOverlap: true,
+    removeShortIsolatedBlocks: true,
   };
 
   const cfg = Object.assign({}, defaults);
@@ -5111,6 +5233,7 @@ function getOperationConfig_() {
       cfg.freeTimeShiftPriorityKeywords = parseKeywordList(cfg.freeTimeShiftPriorityKeywordText);
     }
     cfg.finalFallbackAllowEventOverlap = boolOrDefault_(map['最終フォールバック予定重複'], cfg.finalFallbackAllowEventOverlap);
+    cfg.removeShortIsolatedBlocks = boolOrDefault_(map['短い孤立シフトを解消'], cfg.removeShortIsolatedBlocks);
 
     if (cfg.assignmentMode === '安全優先') {
       cfg.finalFallbackAllowEventOverlap = false;
@@ -5155,6 +5278,7 @@ function getMaxSameTimePeople_() { return Math.max(1, Math.round(getOperationCon
 function getMinPeoplePerDay_() { return Math.max(1, Math.round(getOperationConfig_().minPeoplePerDay)); }
 function getDailyMinHighlightHours_() { return Math.max(0, getOperationConfig_().dailyMinHighlightHours); }
 function getFinalFallbackAllowEventOverlap_() { return getOperationConfig_().finalFallbackAllowEventOverlap; }
+function getRemoveShortIsolatedBlocks_() { return getOperationConfig_().removeShortIsolatedBlocks; }
 
 function buildStrictnessLevels_() {
   const cfg = getOperationConfig_();
