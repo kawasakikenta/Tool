@@ -201,9 +201,19 @@ function autoAssignShiftsRange() {
   periodEnd.setDate(startDate.getDate() + daysToFetch - 1);
   const periodEndStr = Utilities.formatDate(periodEnd, 'JST', 'yyyy-MM-dd');
 
+  // 入力例は「対象期間の一部」を指定するイメージが伝わるように、
+  // 期間の全体（両端）ではなく期間内側の日付を例として提示する。
+  const exStart = new Date(startDate.getTime());
+  exStart.setDate(startDate.getDate() + Math.floor((daysToFetch - 1) / 4));
+  const exEnd = new Date(startDate.getTime());
+  exEnd.setDate(startDate.getDate() + Math.floor((daysToFetch - 1) * 3 / 4));
+  const exStartStr = Utilities.formatDate(exStart, 'JST', 'yyyy-MM-dd');
+  const exEndStr = Utilities.formatDate(exEnd, 'JST', 'yyyy-MM-dd');
+
   const res1 = ui.prompt(
     '指定期間だけ組みなおす（1/2）',
-    `組みなおす「開始日」を入力してください（例: ${periodStartStr}）\n対象期間: ${periodStartStr} 〜 ${periodEndStr}`,
+    `対象期間 ${periodStartStr} 〜 ${periodEndStr} のうち、組みなおしたい範囲の「開始日」を入力してください。\n` +
+    `（YYYY-MM-DD 形式・入力例: ${exStartStr}）`,
     ui.ButtonSet.OK_CANCEL
   );
   if (res1.getSelectedButton() !== ui.Button.OK) return;
@@ -215,7 +225,9 @@ function autoAssignShiftsRange() {
 
   const res2 = ui.prompt(
     '指定期間だけ組みなおす（2/2）',
-    `組みなおす「終了日」を入力してください（両端を含みます・例: ${periodEndStr}）\n対象期間: ${periodStartStr} 〜 ${periodEndStr}`,
+    `組みなおしたい範囲の「終了日」を入力してください（両端を含みます）。\n` +
+    `対象期間: ${periodStartStr} 〜 ${periodEndStr}\n` +
+    `（YYYY-MM-DD 形式・入力例: ${exEndStr}）`,
     ui.ButtonSet.OK_CANCEL
   );
   if (res2.getSelectedButton() !== ui.Button.OK) return;
