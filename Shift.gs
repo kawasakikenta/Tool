@@ -131,6 +131,7 @@ function onOpen() {
     // 毎回使う操作だけをトップに出す。
     .addItem('① カレンダー予定を反映', 'updateTeamCalendarSheets')
     .addItem('② シフトを自動作成（空き枠のみ）', 'autoAssignShiftsPreserve')
+    .addItem('②-2 指定期間だけ組みなおす', 'autoAssignShiftsRange')
     .addItem('③ 集計を更新', 'updateSettingsTotalsOnly')
     .addSeparator()
 
@@ -170,6 +171,98 @@ function onOpen() {
 
 function autoAssignShiftsPreserve() { autoAssignShifts(true); }
 function autoAssignShiftsOverwrite() { autoAssignShifts(false); }
+
+/**
+ * メニュー: 指定期間だけシフトを組みなおす
+ *  - 設定シート A2/B2 の対象期間のうち、入力した開始日〜終了日（両端含む）だけを再割り当てする
+ *  - 範囲外の日は一切変更しない（既存シフトはそのまま）
+ *  - 範囲内でも、ロック列・確定済みの日は保持/スキップされる
+ *  - 範囲外の既存割当は月間目標の消化として扱い、範囲内で過剰配分しないようにする
+ */
+function autoAssignShiftsRange() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const setSheet = ss.getSheetByName('設定');
+  const ui = SpreadsheetApp.getUi();
+
+  if (!setSheet) {
+    ui.alert('「設定」シートを作成してください。');
+    return;
+  }
+
+  const startDate = new Date(setSheet.getRange('A2').getValue());
+  const daysToFetch = Number(setSheet.getRange('B2').getValue());
+  if (isNaN(startDate.getTime()) || !daysToFetch || daysToFetch <= 0) {
+    ui.alert('設定シートの A2（開始日）と B2（取得日数）を確認してください。');
+    return;
+  }
+
+  const periodStartStr = Utilities.formatDate(startDate, 'JST', 'yyyy-MM-dd');
+  const periodEnd = new Date(startDate.getTime());
+  periodEnd.setDate(startDate.getDate() + daysToFetch - 1);
+  const periodEndStr = Utilities.formatDate(periodEnd, 'JST', 'yyyy-MM-dd');
+
+  const res1 = ui.prompt(
+    '指定期間だけ組みなおす（1/2）',
+    `組みなおす「開始日」を入力してください（例: ${periodStartStr}）\n対象期間: ${periodStartStr} 〜 ${periodEndStr}`,
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (res1.getSelectedButton() !== ui.Button.OK) return;
+  const rangeStart = parseInputDate_(res1.getResponseText());
+  if (!rangeStart) {
+    ui.alert('開始日の形式が正しくありません（YYYY-MM-DD で入力してください）。');
+    return;
+  }
+
+  const res2 = ui.prompt(
+    '指定期間だけ組みなおす（2/2）',
+    `組みなおす「終了日」を入力してください（両端を含みます・例: ${periodEndStr}）\n対象期間: ${periodStartStr} 〜 ${periodEndStr}`,
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (res2.getSelectedButton() !== ui.Button.OK) return;
+  const rangeEnd = parseInputDate_(res2.getResponseText());
+  if (!rangeEnd) {
+    ui.alert('終了日の形式が正しくありません（YYYY-MM-DD で入力してください）。');
+    return;
+  }
+
+  const rStartStr = Utilities.formatDate(rangeStart, 'JST', 'yyyy-MM-dd');
+  const rEndStr = Utilities.formatDate(rangeEnd, 'JST', 'yyyy-MM-dd');
+  if (rStartStr > rEndStr) {
+    ui.alert('開始日が終了日より後になっています。入力し直してください。');
+    return;
+  }
+  if (rEndStr < periodStartStr || rStartStr > periodEndStr) {
+    ui.alert(`指定した期間が対象期間（${periodStartStr} 〜 ${periodEndStr}）と重なっていません。`);
+    return;
+  }
+
+  const confirm = ui.alert(
+    '確認',
+    `${rStartStr} 〜 ${rEndStr} の期間だけシフトを組みなおします。\n` +
+    'この期間の既存シフト（ロック列・確定済みの日を除く）は再割り当てされます。\n' +
+    '期間外の日は変更しません。\n\n続行しますか？',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (confirm !== ui.Button.OK) return;
+
+  autoAssignShifts(false, { rangeStart: rangeStart, rangeEnd: rangeEnd, skipConfirm: true });
+}
+
+/**
+ * 「YYYY-MM-DD」（区切りは - / . いずれも可）の文字列を Date に変換する。
+ * 不正な日付・形式なら null を返す。
+ */
+function parseInputDate_(text) {
+  const t = String(text || '').trim();
+  const m = t.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const date = new Date(y, mo - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d) return null;
+  return date;
+}
 
 /**
  * メニュー: シフト欄を初期化（全クリア）
@@ -838,7 +931,7 @@ function autoAssignShifts(preserveManual, options) {
     return;
   }
 
-  if (!preserveManual && !dryRun) {
+  if (!preserveManual && !dryRun && !options.skipConfirm) {
     const res = ui.alert(
       '確認',
       '既存のシフト（4列分）が全て削除され、自動で再割り当てされます。続行しますか？',
@@ -968,6 +1061,13 @@ function autoAssignShifts(preserveManual, options) {
   autoPopulateExcludedDates(setSheet, startDate, daysToFetch);
   const excludedDateSet = readExcludedDates(setSheet);
 
+  // 指定期間だけ組みなおすモード（options.rangeStart / rangeEnd, 両端を含む）。
+  // 範囲外の日は一切変更しないが、月間目標の残り計算のため既存割当は集計しておく。
+  const rangeStartStr = options.rangeStart ? Utilities.formatDate(new Date(options.rangeStart), 'JST', 'yyyy-MM-dd') : null;
+  const rangeEndStr = options.rangeEnd ? Utilities.formatDate(new Date(options.rangeEnd), 'JST', 'yyyy-MM-dd') : null;
+  const isRangeMode = !!(rangeStartStr && rangeEndStr);
+  const baselineTotalSlots = new Array(users.length).fill(0);
+
   const daysData = [];
   const warnings = [];
   let confirmedSkipCount = 0;
@@ -976,6 +1076,24 @@ function autoAssignShifts(preserveManual, options) {
     const targetDate = new Date(startDate.getTime());
     targetDate.setDate(startDate.getDate() + d);
     const dateStr = Utilities.formatDate(targetDate, 'JST', 'yyyy-MM-dd');
+
+    // 範囲外の日は組みなおさない。既存シフトの本人名スロットだけ月間目標へ算入する。
+    if (isRangeMode && (dateStr < rangeStartStr || dateStr > rangeEndStr)) {
+      if (excludedDateSet.has(dateStr)) continue;
+      const outSheet = ss.getSheetByName(dateStr);
+      if (!outSheet) continue;
+      const outA4 = outSheet.getRange(4, 1).getDisplayValue().trim();
+      if (/^\d{1,2}:\d{2}$/.test(outA4)) continue; // 旧形式は読まない
+      const outCol1 = users.length + 2;
+      const outShifts = outSheet.getRange(TIME_SLOT_START_ROW, outCol1, numSlots, users.length).getValues();
+      for (let s = 0; s < numSlots; s++) {
+        for (let c = 0; c < users.length; c++) {
+          const v = String(outShifts[s][c] || '').trim();
+          if (v && v === String(users[c].name || '').trim()) baselineTotalSlots[c]++;
+        }
+      }
+      continue;
+    }
 
     if (excludedDateSet.has(dateStr)) continue;
 
@@ -1032,6 +1150,9 @@ function autoAssignShifts(preserveManual, options) {
   }
 
   const userTotalSlots = new Array(users.length).fill(0);
+  // 指定期間モードでは、範囲外の日の既存割当を月間累計の初期値として加える
+  // （E目標・月間目標の残りが正しく計算され、範囲内で過剰に割り当てないようにする）。
+  for (let i = 0; i < users.length; i++) userTotalSlots[i] += baselineTotalSlots[i];
   const userDailySlots = daysData.map(() => new Array(users.length).fill(0));
 
   // 週次担当（その週の主担当・稼働メンバー）を読み込む。
@@ -4428,6 +4549,7 @@ function createSettingsSheet() {
     '3. メニュー「最新のカレンダー予定を反映（シフト保持）」を実行\n' +
     '4. シフトを空にしたい場合だけ、メニュー「シフト欄を初期化（全クリア）」を実行\n' +
     '5. メニュー「シフトを自動入力（空き枠のみ）」を実行\n\n' +
+    '※ 一部の期間だけ組みなおしたい場合は、メニュー「指定期間だけ組みなおす」で開始日〜終了日を指定してください（範囲外の日は変更されません）\n' +
     '※ 詳細ルールは「使い方」シートを参照してください\n' +
     '※ 週ごとの主担当・稼働メンバーを指定したい場合は「週次担当シートを作成/更新」も実行してください\n' +
     '※ 特定の予定を自動割当で無視したい場合は「運用設定シートを作成/更新」の「自動割当: 予定無視キーワード」を設定してください',
@@ -4698,6 +4820,7 @@ function createDocsSheet() {
     { type: 'kv', k: 'シフト欄を初期化（全クリア）', v: 'カレンダー予定は残し、対象期間の日付シートのシフト欄とロック状態だけを初期化' },
     { type: 'kv', k: '集計のみ更新', v: '設定シートの集計だけ再計算（10時間未満強調も更新、F列「予定時間(目安)」も再計算）' },
     { type: 'kv', k: 'シフトを自動入力（空き枠のみ）', v: '手動シフトを保護して空き枠だけ自動で埋める' },
+    { type: 'kv', k: '指定期間だけ組みなおす', v: '入力した開始日〜終了日（両端含む）だけを再割当。範囲外の日は変更せず、範囲外の既存割当は月間目標の消化として扱う。ロック列・確定日は保持' },
     { type: 'kv', k: 'シフトを自動入力（全クリア）', v: '全シフトをクリアして自動再割当（確認ダイアログあり）' },
     { type: 'kv', k: '空き時間を抽出', v: '個人稼働時間内のシフト×予定を4区分で集計。運用設定「空き時間抽出: 実シフト優先キーワード」に一致する予定は予定扱いせず、シフト欄の有無を優先（実シフト優先が既定）' },
     { type: 'kv', k: '週次担当シートを作成/更新', v: '週ごとの主担当・稼働メンバーを入力するシートを作成。対象期間の週を自動で並べ、既存入力は保持' },
