@@ -78,6 +78,7 @@ function createCalendarConfigSheet() {
     ['開始時刻', '09:00'],
     ['終了時刻', '18:00'],
     ['時間刻み（分）', 15],
+    ['終日予定を別枠で取得（する / しない）', 'する'],
   ];
   sheet.getRange(1, 1, settings.length, 2).setValues(settings);
 
@@ -96,6 +97,11 @@ function createCalendarConfigSheet() {
     SpreadsheetApp.newDataValidation().requireValueInList(['縦', '横'], true).build()
   );
 
+  // 終日予定の取得有無はプルダウンに
+  sheet.getRange(10, 2).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(['する', 'しない'], true).build()
+  );
+
   // 補足メモ
   sheet.getRange(2, 3).setValue('例: カレンダー出力（日付ごとに「_yyyy-MM-dd」を付けたシートを作成）').setFontColor('#999999');
   sheet.getRange(3, 3).setValue('例: A1 / C3 など').setFontColor('#999999');
@@ -103,6 +109,8 @@ function createCalendarConfigSheet() {
   sheet.getRange(5, 3).setValue('yyyy-MM-dd 形式').setFontColor('#999999');
   sheet.getRange(6, 3).setValue('yyyy-MM-dd 形式（開始日以降）').setFontColor('#999999');
   sheet.getRange(9, 3).setValue('例: 15 / 30 / 60').setFontColor('#999999');
+  sheet.getRange(10, 3).setValue('する=終日予定を専用欄に表示 / しない=終日予定は取得しない')
+    .setFontColor('#999999');
 
   // ---- ユーザー（対象カレンダー）一覧 ----
   const headerRow = CTS_USER_START_ROW - 1;
@@ -192,6 +200,7 @@ function extractCalendarToSheet() {
     `・貼り付け先: 日付ごとにシートを作成（${cfg.destCellA1} 起点）\n` +
     `・向き: ${cfg.orientation}向き\n` +
     `・期間: ${fmtDate_(cfg.startDate)} 〜 ${fmtDate_(cfg.endDate)}（${days.length}日）\n` +
+    `・終日予定: ${cfg.fetchAllDay ? '別枠で取得' : '取得しない'}\n` +
     `・対象: ${cfg.users.length}名\n` +
     `・作成シート: ${sheetNames.join(', ')}`,
     ui.ButtonSet.OK
@@ -221,6 +230,7 @@ function readCalendarConfig_(ss) {
   const startTime = parseTimeStr_(get(7)) || '09:00';
   const endTime = parseTimeStr_(get(8)) || '18:00';
   const stepMinutes = parseInt(get(9), 10) || 15;
+  const fetchAllDay = !/しない|no|false/i.test(get(10));
 
   if (!destSheetName) return { error: '「貼り付け先シート名」を入力してください。' };
   const cell = parseA1_(destCellA1);
@@ -243,6 +253,7 @@ function readCalendarConfig_(ss) {
     destRow: cell.row, destCol: cell.col,
     orientation, startDate, endDate,
     startTime, endTime, stepMinutes,
+    fetchAllDay,
     users,
   };
 }
@@ -288,27 +299,24 @@ function fetchEvents_(email, date) {
   }
 }
 
-/** 予定配列を時間スロット配列（各スロットの予定タイトル or ''）に変換 */
-function buildSlotData_(events, timeSlots, date) {
-  // 終日予定は後ろにして、時間指定の予定を優先的に埋める
-  const sorted = events.slice().sort((a, b) => {
-    const aAll = isAllDayEventSafe_(a);
-    const bAll = isAllDayEventSafe_(b);
-    if (aAll === bAll) return 0;
-    return aAll ? 1 : -1;
-  });
-
+/**
+ * 予定配列を「時間スロット配列」と「終日予定」に分けて変換する。
+ * 返り値: { slots: string[], allDay: string }
+ *   slots  … 時間指定の予定（各スロットの予定タイトル or ''）
+ *   allDay … 終日予定のタイトルをまとめた文字列（fetchAllDay=false のときは常に ''）
+ */
+function buildSlotData_(events, timeSlots, date, fetchAllDay) {
   const slotData = new Array(timeSlots.length).fill('');
+  const allDayTitles = [];
 
-  sorted.forEach(event => {
+  events.forEach(event => {
     let title;
     try { title = event.getTitle(); } catch (e) { title = '(予定)'; }
     if (!title) title = '(予定)';
 
+    // 終日予定は時間スロットには入れず、別枠に集約する
     if (isAllDayEventSafe_(event)) {
-      for (let i = 0; i < timeSlots.length; i++) {
-        if (!slotData[i]) slotData[i] = title;
-      }
+      if (fetchAllDay) allDayTitles.push(title);
       return;
     }
 
@@ -330,7 +338,7 @@ function buildSlotData_(events, timeSlots, date) {
     }
   });
 
-  return slotData;
+  return { slots: slotData, allDay: allDayTitles.join(' / ') };
 }
 
 /** ===================== 出力（縦向き） =====================
@@ -369,10 +377,23 @@ function writeVertical_(sheet, cfg, timeSlots, dayData) {
     const headerRow = curRow;
     curRow++;
 
+    // 終日予定行（設定で「取得する」の場合のみ）
+    if (cfg.fetchAllDay) {
+      const allDayLine = ['終日'].concat(users.map((u, c) => day.userSlots[c].allDay));
+      sheet.getRange(curRow, baseCol, 1, totalCols).setValues([allDayLine]);
+      sheet.getRange(curRow, baseCol).setBackground('#666666').setFontColor('#ffffff').setFontWeight('bold');
+      users.forEach((u, c) => {
+        if (day.userSlots[c].allDay) {
+          sheet.getRange(curRow, baseCol + 1 + c).setBackground(u.bgColor).setFontColor(u.fontColor);
+        }
+      });
+      curRow++;
+    }
+
     // 本体（時刻列 + 予定）
     const body = timeSlots.map((t, r) => {
       const line = [t];
-      users.forEach((u, c) => line.push(day.userSlots[c][r]));
+      users.forEach((u, c) => line.push(day.userSlots[c].slots[r]));
       return line;
     });
     sheet.getRange(curRow, baseCol, timeSlots.length, totalCols).setValues(body);
@@ -381,7 +402,7 @@ function writeVertical_(sheet, cfg, timeSlots, dayData) {
     // 予定セルの色付け＆縦方向の連結
     users.forEach((u, c) => {
       const col = baseCol + 1 + c;
-      mergeAndColorRuns_(sheet, day.userSlots[c], u, /*vertical=*/true, curRow, col);
+      mergeAndColorRuns_(sheet, day.userSlots[c].slots, u, /*vertical=*/true, curRow, col);
     });
 
     curRow += timeSlots.length;
@@ -405,7 +426,9 @@ function writeVertical_(sheet, cfg, timeSlots, dayData) {
  */
 function writeHorizontal_(sheet, cfg, timeSlots, dayData) {
   const users = cfg.users;
-  const totalCols = 1 + timeSlots.length;
+  const allDayCols = cfg.fetchAllDay ? 1 : 0; // 終日予定列の有無
+  const slotCol = 1 + allDayCols; // 時刻スロットが始まる相対位置（氏名列＝0）
+  const totalCols = slotCol + timeSlots.length;
   let curRow = cfg.destRow;
   const baseCol = cfg.destCol;
 
@@ -421,8 +444,8 @@ function writeHorizontal_(sheet, cfg, timeSlots, dayData) {
       .setFontWeight('bold').setHorizontalAlignment('center');
     curRow++;
 
-    // 見出し行（時刻を横に並べる）
-    const header = ['氏名＼時刻'].concat(timeSlots);
+    // 見出し行（時刻を横に並べる。終日予定列があれば氏名の次に置く）
+    const header = ['氏名＼時刻'].concat(cfg.fetchAllDay ? ['終日'] : []).concat(timeSlots);
     sheet.getRange(curRow, baseCol, 1, totalCols).setValues([header])
       .setFontWeight('bold').setHorizontalAlignment('center')
       .setBackground('#444444').setFontColor('#ffffff');
@@ -431,12 +454,18 @@ function writeHorizontal_(sheet, cfg, timeSlots, dayData) {
 
     // ユーザーごとに1行
     users.forEach((u, uIdx) => {
-      const line = [u.name].concat(day.userSlots[uIdx]);
+      const line = [u.name]
+        .concat(cfg.fetchAllDay ? [day.userSlots[uIdx].allDay] : [])
+        .concat(day.userSlots[uIdx].slots);
       sheet.getRange(curRow, baseCol, 1, totalCols).setValues([line]);
       // 氏名セル
       sheet.getRange(curRow, baseCol).setBackground(u.bgColor).setFontColor(u.fontColor).setFontWeight('bold');
+      // 終日予定セル
+      if (cfg.fetchAllDay && day.userSlots[uIdx].allDay) {
+        sheet.getRange(curRow, baseCol + 1).setBackground(u.bgColor).setFontColor(u.fontColor);
+      }
       // 予定セルの色付け＆横方向の連結
-      mergeAndColorRuns_(sheet, day.userSlots[uIdx], u, /*vertical=*/false, curRow, baseCol + 1);
+      mergeAndColorRuns_(sheet, day.userSlots[uIdx].slots, u, /*vertical=*/false, curRow, baseCol + slotCol);
       curRow++;
     });
 
@@ -446,7 +475,8 @@ function writeHorizontal_(sheet, cfg, timeSlots, dayData) {
   });
 
   sheet.setColumnWidth(baseCol, 120);
-  for (let c = 1; c < totalCols; c++) sheet.setColumnWidth(baseCol + c, 70);
+  if (cfg.fetchAllDay) sheet.setColumnWidth(baseCol + 1, 120); // 終日予定列
+  for (let c = slotCol; c < totalCols; c++) sheet.setColumnWidth(baseCol + c, 70);
   return { rows: curRow - cfg.destRow, cols: totalCols };
 }
 
@@ -477,13 +507,14 @@ function mergeAndColorRuns_(sheet, slotData, user, vertical, startRow, startCol)
 function clearOutputArea_(sheet, cfg, timeSlots, dayData) {
   const days = dayData.length;
   let rows, cols;
+  const allDay = cfg.fetchAllDay ? 1 : 0;
   if (cfg.orientation === '横') {
     // 日付行 + 見出し行 + ユーザー行、を日数分。日間に空行1
     const perDay = 2 + cfg.users.length;
     rows = perDay * days + (days - 1);
-    cols = 1 + timeSlots.length;
+    cols = 1 + allDay + timeSlots.length; // 氏名列 + 終日列 + 時刻列
   } else {
-    const perDay = 2 + timeSlots.length; // 日付行 + 見出し行 + スロット
+    const perDay = 2 + allDay + timeSlots.length; // 日付行 + 見出し行 + 終日行 + スロット
     rows = perDay * days + (days - 1);
     cols = 1 + cfg.users.length;
   }
