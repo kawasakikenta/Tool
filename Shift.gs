@@ -141,7 +141,6 @@ function onOpen() {
       .addSeparator()
       .addItem('週次担当シートを作成/更新', 'createWeeklyAssignmentSheet')
       .addSeparator()
-      .addItem('希望シフト入力シートを作成', 'createShiftRequestSheet')
       .addItem('テスト用シミュレーションシートを作成', 'createTestSimulationSheet'))
 
     // 確認・分析・補填は必要な時だけ開く。
@@ -4623,7 +4622,6 @@ const SHIFT_HISTORY_SHEET_NAME = '変更履歴';
 const SHIFT_BACKUP_SHEET_NAME = '__シフトバックアップ';
 const PREVIEW_SHEET_NAME = '自動割当プレビュー';
 const SHORTAGE_REPORT_SHEET_NAME = '不足日レポート';
-const REQUEST_SHEET_NAME = '希望シフト';
 const VALIDATION_REPORT_SHEET_NAME = '設定チェック';
 const ERROR_REPORT_SHEET_NAME = 'エラーレポート';
 const SIMULATION_SHEET_NAME = 'テストシミュレーション';
@@ -4640,7 +4638,6 @@ function initializeEnhancedShiftFeatures() {
   createUserAttributesSheet();
   createWeeklyAssignmentSheet();
   createShiftHistorySheet();
-  createShiftRequestSheet();
   validateSettings();
   SpreadsheetApp.getUi().alert('補助シートを作成/更新しました。');
 }
@@ -5280,7 +5277,6 @@ function buildShortageRows_(ctx) {
         if (ctx.isLunchSlot[s]) continue;
         if (shift[s][idx]) continue;
         if (!availability[idx][s]) continue;
-        if (isNgRequested_(u.email, dateStr, ctx.timeSlots[s])) continue;
         freeSlots++;
       }
       if (freeSlots > 0) candidates.push({ name: u.name, hours: freeSlots / 4 });
@@ -5378,7 +5374,6 @@ function fillShortageOnlySafely() {
         if (shift[s][uIdx]) continue;
         if (!availability[uIdx][s]) continue;
         if (isSpecialBlockedSlot(day, uIdx, s)) continue;
-        if (isNgRequested_(ctx.users[uIdx].email, dateStr, ctx.timeSlots[s])) continue;
         let otherCount = 0;
         for (let c = 0; c < ctx.users.length; c++) if (shift[s][c]) otherCount++;
         if (otherCount >= 2) continue;
@@ -5562,49 +5557,6 @@ function createErrorReport() {
   sheet.setColumnWidth(4, 360);
   sheet.getRange(1, 1, rows.length, 4).setWrap(true).setVerticalAlignment('middle');
   SpreadsheetApp.getUi().alert(`エラーレポートを作成しました。\n検出件数: ${rows.length - 1}`);
-}
-
-
-function createShiftRequestSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const setSheet = ss.getSheetByName('設定');
-  const users = setSheet ? readUsers(setSheet) : [];
-  let sheet = ss.getSheetByName(REQUEST_SHEET_NAME);
-  if (!sheet) sheet = ss.insertSheet(REQUEST_SHEET_NAME);
-  const hasExisting = sheet.getLastRow() >= 1 && String(sheet.getRange(1, 1).getValue()).trim() === '名前';
-
-  if (!hasExisting) {
-    resetSimpleSheet_(sheet);
-    sheet.getRange(1, 1, 1, 5).setValues([['名前', 'メール', '日付', '時刻帯', '種別(NG/希望)']]);
-    sheet.getRange(1, 1, 1, 5).setBackground('#990000').setFontColor('#ffffff').setFontWeight('bold');
-    sheet.getRange(2, 5, 200, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['NG', '希望'], true).build());
-    if (users.length > 0) {
-      const sample = users.slice(0, 1).map(u => [u.name, u.email, '', '終日', 'NG']);
-      sheet.getRange(2, 1, sample.length, 5).setValues(sample);
-    }
-  }
-  sheet.setFrozenRows(1);
-  sheet.setColumnWidths(1, 5, 150);
-  SpreadsheetApp.getUi().alert('希望シフト入力シートを作成しました。\nC列日付・D列時刻帯（HH:mm-HH:mm または「終日」）・E列でNG/希望を指定してください。');
-}
-
-function isNgRequested_(email, dateStr, timeStr) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(REQUEST_SHEET_NAME);
-  if (!sheet || sheet.getLastRow() < 2) return false;
-  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
-  const emLower = String(email || '').toLowerCase();
-  for (const row of values) {
-    if (String(row[1] || '').toLowerCase() !== emLower) continue;
-    if (String(row[4] || '').trim() !== 'NG') continue;
-    const rowDateStr = normalizeDateValue_(row[2]);
-    if (rowDateStr !== dateStr) continue;
-    const range = String(row[3] || '').trim();
-    if (range === '終日' || range === '') return true;
-    const m = range.match(/^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$/);
-    if (m && timeStr >= m[1] && timeStr < m[2]) return true;
-  }
-  return false;
 }
 
 
@@ -5893,15 +5845,6 @@ function formatHours_(hours) {
   const h = Math.floor(abs);
   const m = Math.round((abs - h) * 60);
   return `${sign}${h}:${String(m).padStart(2, '0')}`;
-}
-
-function normalizeDateValue_(value) {
-  if (value instanceof Date) return Utilities.formatDate(value, 'JST', 'yyyy-MM-dd');
-  const s = String(value || '').trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
-  const d = new Date(s);
-  if (!isNaN(d.getTime())) return Utilities.formatDate(d, 'JST', 'yyyy-MM-dd');
-  return s;
 }
 
 function sanitizeForId_(text) {
