@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="文字を入力するだけで業務フロー図を作成できるツール">
+  <title>かんたん業務フロー作成</title>
+  <style>
+    :root { --blue:#356ae6; --ink:#182235; --muted:#768196; --line:#e1e5ec; --bg:#f5f7fa; --red:#d95663; }
+    * { box-sizing:border-box; }
+    html, body { height:100%; margin:0; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif; color:var(--ink); }
+    button, input, textarea { font:inherit; }
+    button { cursor:pointer; }
+    .app { height:100%; display:grid; grid-template-rows:60px 1fr; }
+    header { display:flex; align-items:center; gap:12px; padding:0 22px; border-bottom:1px solid var(--line); background:#fff; }
+    .logo { width:32px; height:32px; display:grid; place-items:center; border-radius:9px; background:var(--blue); color:#fff; font-weight:800; }
+    header h1 { margin:0; font-size:16px; }
+    .saved { color:#8a94a5; font-size:11px; display:flex; align-items:center; gap:6px; }
+    .saved::before { content:""; width:6px; height:6px; border-radius:50%; background:#27a473; }
+    .actions { margin-left:auto; display:flex; gap:8px; }
+    .btn { border:1px solid var(--line); border-radius:8px; padding:8px 12px; background:#fff; color:#536074; font-weight:650; }
+    .btn:hover { background:#f7f9fc; }
+    .btn.primary { color:#fff; background:var(--blue); border-color:var(--blue); }
+    main { min-height:0; display:grid; grid-template-columns:minmax(340px, 42%) 1fr; }
+    .editor { min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--line); background:#fff; }
+    .panel-head { min-height:58px; display:flex; align-items:center; padding:0 20px; border-bottom:1px solid var(--line); }
+    .panel-head h2 { font-size:13px; margin:0; }
+    .panel-head span { margin-left:8px; font-size:11px; color:var(--muted); }
+    .help-btn { margin-left:auto; border:0; background:#eef3ff; color:var(--blue); border-radius:7px; padding:6px 9px; font-weight:700; }
+    .guide { margin:14px 16px 0; padding:12px 14px; border-radius:9px; background:#f4f7ff; color:#58667c; font-size:11px; line-height:1.7; }
+    .guide b { color:#315cb8; }
+    .guide code { background:#fff; border:1px solid #dce5fb; border-radius:4px; padding:1px 4px; }
+    textarea { flex:1; min-height:0; resize:none; margin:14px 16px 16px; padding:16px; border:1px solid #d9dee7; border-radius:10px; outline:0; color:#26344a; background:#fbfcfe; font:14px/1.9 ui-monospace,SFMono-Regular,Consolas,"Noto Sans Mono",monospace; tab-size:2; }
+    textarea:focus { border-color:#8eabed; box-shadow:0 0 0 3px #edf3ff; background:#fff; }
+    .preview { min-width:0; min-height:0; position:relative; display:flex; flex-direction:column; background:var(--bg); }
+    .preview .panel-head { background:#fff; }
+    .flow-name { border:1px solid transparent; padding:6px 8px; border-radius:6px; font-weight:750; outline:0; width:260px; }
+    .flow-name:hover { border-color:var(--line); }
+    .flow-name:focus { border-color:#9ab4ef; }
+    .status { margin-left:auto; color:var(--muted); font-size:11px; }
+    .status.error { color:var(--red); }
+    .preview-tools { display:flex; align-items:center; gap:5px; margin-left:12px; }
+    .preview-tools button,.preview-tools select { height:30px; border:1px solid var(--line); border-radius:6px; background:#fff; color:#5b6678; padding:0 8px; font-size:11px; }
+    .preview-tools button:hover { background:#f2f5fa; }
+    .preview-tools .zoom-value { min-width:42px; text-align:center; color:#8791a2; font-size:10px; }
+    .canvas { flex:1; min-height:0; overflow:auto; padding:35px; background-color:#fafbfd; background-image:radial-gradient(#d8dde5 1px, transparent 1px); background-size:20px 20px; }
+    #diagram { display:block; min-width:100%; min-height:100%; overflow:visible; transform-origin:top left; transition:transform .15s; }
+    .legend { position:absolute; right:16px; bottom:16px; display:flex; gap:12px; padding:8px 11px; border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.94); color:#748095; font-size:10px; box-shadow:0 3px 12px #26334b12; }
+    .legend span { display:flex; align-items:center; gap:5px; }
+    .legend i { display:inline-block; width:18px; height:11px; border:2px solid #668be0; border-radius:3px; }
+    .legend .terminal { border-color:#4fa47e; border-radius:8px; }
+    .legend .decision { width:11px; height:11px; border-color:#dca63a; border-radius:1px; transform:rotate(45deg); margin:0 3px; }
+    .empty { position:absolute; inset:58px 0 0; display:grid; place-items:center; color:#909aaa; text-align:center; pointer-events:none; }
+    .empty b { display:block; color:#606d81; margin-bottom:7px; }
+    .examples { display:none; position:absolute; inset:58px 0 0; z-index:10; background:rgba(245,247,250,.96); padding:30px; overflow:auto; }
+    .examples.show { display:block; }
+    .example-card { max-width:640px; margin:0 auto 12px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:15px; }
+    .example-card h3 { margin:0 0 8px; font-size:13px; }
+    .example-card pre { margin:0; white-space:pre-wrap; color:#58667b; font:12px/1.7 ui-monospace,monospace; }
+    .example-card button { margin-top:10px; color:var(--blue); border:0; background:#edf3ff; border-radius:6px; padding:6px 9px; font-weight:700; }
+    .toast { position:fixed; left:50%; bottom:22px; transform:translate(-50%,10px); opacity:0; background:#172033; color:#fff; border-radius:8px; padding:10px 15px; font-size:12px; transition:.2s; z-index:30; }
+    .toast.show { opacity:1; transform:translate(-50%,0); }
+    @media (max-width:760px) { main { grid-template-columns:1fr; grid-template-rows:47% 53%; } .editor { border-right:0; border-bottom:1px solid var(--line); } .panel-head { min-height:46px; } .guide,.legend { display:none; } textarea { margin:9px; padding:12px; } .canvas { padding:20px; } header { padding:0 10px; } header h1,.saved,.actions .text,.preview-tools select { display:none; } .flow-name{width:150px}.preview-tools{margin-left:5px}.status{display:none} }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">→</div><h1>かんたん業務フロー作成</h1>
+    <span class="saved" id="saved">自動保存済み</span>
+    <div class="actions"><button class="btn" id="resetBtn">新規</button><button class="btn" id="loadBtn"><span class="text">テキスト</span>読込</button><button class="btn" id="copyBtn">コピー</button><button class="btn" id="pngBtn">PNG</button><button class="btn primary" id="downloadBtn"><span class="text">SVGを</span>保存</button></div>
+  </header>
+  <main>
+    <section class="editor">
+      <div class="panel-head"><h2>フローを入力</h2><span>入力すると自動で反映</span><button class="help-btn" id="helpBtn">書き方</button></div>
+      <div class="guide"><b>「担当者名:」の下に工程を書くだけ。</b><br><code>営業:</code><br><code>受付 → 内容確認 → 見積作成</code><br>担当者ごとのスイムレーンを自動作成します。</div>
+      <textarea id="source" spellcheck="false" aria-label="業務フローの入力欄"></textarea>
+    </section>
+    <section class="preview">
+      <div class="panel-head"><input class="flow-name" id="flowName" value="受注業務フロー" aria-label="フロー名"><span class="status" id="status"></span><div class="preview-tools"><select id="theme" aria-label="配色"><option value="blue">ブルー</option><option value="green">グリーン</option><option value="mono">モノクロ</option></select><button id="zoomOut" title="縮小">−</button><span class="zoom-value" id="zoomValue">100%</span><button id="zoomIn" title="拡大">＋</button><button id="fitBtn" title="全体表示">全体</button></div></div>
+      <div class="canvas"><svg id="diagram" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div class="empty" id="empty"><div><b>左側に工程を入力してください</b>入力した内容がここに図で表示されます</div></div>
+      <div class="examples" id="examples">
+        <div class="example-card"><h3>担当ごとのスイムレーン</h3><pre>営業:
+問い合わせ受付 → 内容確認 → 見積作成
+責任者:
+見積作成 → 見積承認
+営業:
+見積承認 → 受注 → 納品完了</pre><button data-example="swimlane">この例を使う</button></div>
+        <div class="example-card"><h3>基本の書き方</h3><pre>受付 → 内容確認 → 見積作成 → 対応完了</pre><button data-example="basic">この例を使う</button></div>
+        <div class="example-card"><h3>条件分岐を含む書き方</h3><pre>受付 → 内容確認 → 対応可能？
+対応可能？ -- はい → 見積作成 → 受注 → 納品完了
+対応可能？ -- いいえ → お断り連絡</pre><button data-example="branch">この例を使う</button></div>
+        <div class="example-card"><h3>図形を指定する書き方</h3><pre>開始((問い合わせ受付)) → 確認[内容を確認]
+確認 → 判断{対応可能？}
+判断 -- はい → 完了((納品完了))</pre><button data-example="shapes">この例を使う</button></div>
+      </div>
+      <div class="legend"><span><i class="terminal"></i>開始・終了</span><span><i></i>処理</span><span><i class="decision"></i>判断</span></div>
+    </section>
+  </main>
+</div><input type="file" id="fileInput" accept=".txt,text/plain" hidden><div class="toast" id="toast"></div>
+<script>
+const examples={
+  swimlane:'営業:\n問い合わせ受付 → 内容確認 → 見積作成\n\n責任者:\n見積作成 → 見積承認\n\n営業:\n見積承認 → 受注 → 納品完了',
+  basic:'受付 → 内容確認 → 見積作成 → 対応完了',
+  branch:'受付 → 内容確認 → 対応可能？\n対応可能？ -- はい → 見積作成 → 受注 → 納品完了\n対応可能？ -- いいえ → お断り連絡',
+  shapes:'開始((問い合わせ受付)) → 確認[内容を確認]\n確認 → 判断{対応可能？}\n判断 -- はい → 完了((納品完了))'
+};
+const initial=examples.swimlane;
+const $=s=>document.querySelector(s),source=$('#source'),svg=$('#diagram');
+const themes={blue:{process:'#668be0',terminal:'#4fa47e',decision:'#dca63a',lane1:'#ffffff',lane2:'#f7f9fc',head1:'#f3f6fb',head2:'#eef2f8'},green:{process:'#4b9b81',terminal:'#2f8b67',decision:'#cf9630',lane1:'#fbfefc',lane2:'#f2f9f5',head1:'#e9f5ef',head2:'#e2f0e9'},mono:{process:'#657083',terminal:'#465365',decision:'#657083',lane1:'#ffffff',lane2:'#f5f5f5',head1:'#eeeeee',head2:'#e6e6e6'}};
+let zoom=1;
+function storageGet(key,fallback){try{return localStorage.getItem(key)||fallback}catch{return fallback}}
+function storageSet(key,value){try{localStorage.setItem(key,value)}catch{/* プライベートブラウズなど保存不可の環境でも作成は続ける */}}
+source.value=storageGet('simple-flow-source',initial);
+$('#flowName').value=storageGet('simple-flow-name','受注業務フロー');
+
+function escapeHtml(value=''){const el=document.createElement('div');el.textContent=value;return el.innerHTML}
+function svgText(label,x,y,maxChars=12){const chars=[...label],lines=[];for(let i=0;i<chars.length;i+=maxChars)lines.push(chars.slice(i,i+maxChars).join(''));const start=y-(lines.length-1)*8;return`<text x="${x}" y="${start}" text-anchor="middle" font-size="13" font-weight="700" fill="#26344a">${lines.map((line,index)=>`<tspan x="${x}" dy="${index?16:0}">${escapeHtml(line)}</tspan>`).join('')}</text>`}
+function readNode(raw){
+  raw=raw.trim(); let id=raw,label=raw,type='process',match,explicit=false;
+  if((match=raw.match(/^(.+?)\(\((.+)\)\)$/))){id=match[1];label=match[2];type='terminal';explicit=true}
+  else if((match=raw.match(/^(.+?)\{(.+)\}$/))){id=match[1];label=match[2];type='decision';explicit=true}
+  else if((match=raw.match(/^(.+?)\[(.+)\]$/))){id=match[1];label=match[2];explicit=true}
+  else { label=raw; if(/開始|受付$/.test(raw))type='terminal'; if(/完了|終了$/.test(raw))type='terminal'; if(/[?？]$/.test(raw))type='decision'; }
+  return{id:id.trim(),label:label.trim(),type,explicit};
+}
+function parse(text){
+  const nodes=new Map(),edges=[],lanes=[];let currentLane='共通';
+  const ensureLane=lane=>{if(!lanes.includes(lane))lanes.push(lane)};
+  const addNode=node=>{const current=nodes.get(node.id);if(!current||node.explicit)nodes.set(node.id,{...node,lane:current?.lane||currentLane});return nodes.get(node.id)};
+  text.split(/\n/).map(x=>x.trim()).filter(x=>x&&!x.startsWith('#')).forEach(line=>{
+    const laneHeader=line.match(/^(.+?)[：:]$/);
+    if(laneHeader&&!/[→>-]/.test(line)){currentLane=laneHeader[1].trim()||'共通';ensureLane(currentLane);return}
+    ensureLane(currentLane);
+    const normalized=line.replace(/-->/g,'→').replace(/->/g,'→');
+    const parts=normalized.split(/\s*→\s*/).filter(Boolean);
+    if(!parts.length)return;
+    let previous=readNode(parts[0]),branchLabel='';
+    const branch=parts[0].match(/^(.*?)\s*--\s*(.+?)\s*$/);
+    if(branch){previous=readNode(branch[1]);branchLabel=branch[2]}
+    previous=addNode(previous);
+    for(let i=1;i<parts.length;i++){
+      const current=addNode(readNode(parts[i])),label=i===1?branchLabel:'';
+      const duplicate=edges.find(e=>e.from===previous.id&&e.to===current.id);
+      if(!duplicate)edges.push({from:previous.id,to:current.id,label});else if(label&&!duplicate.label)duplicate.label=label;
+      previous=current;
+    }
+  });
+  return{nodes:[...nodes.values()],edges,lanes:lanes.length?lanes:['共通']};
+}
+function layout(graph){
+  const incoming=new Map(graph.nodes.map(n=>[n.id,0]));graph.edges.forEach(e=>incoming.set(e.to,(incoming.get(e.to)||0)+1));
+  const levels=new Map(),queue=graph.nodes.filter(n=>!incoming.get(n.id)).map(n=>n.id);if(!queue.length&&graph.nodes.length)queue.push(graph.nodes[0].id);
+  queue.forEach(id=>levels.set(id,0));let guard=0;
+  while(queue.length&&guard++<500){const id=queue.shift(),level=levels.get(id)||0;graph.edges.filter(e=>e.from===id).forEach(e=>{if(!levels.has(e.to)){levels.set(e.to,level+1);queue.push(e.to)}})}
+  graph.nodes.forEach(n=>{if(!levels.has(n.id))levels.set(n.id,0)});
+  const laneSlots=new Map();
+  graph.nodes.forEach(n=>{const level=levels.get(n.id),slotKey=`${n.lane}:${level}`,slot=laneSlots.get(slotKey)||0;laneSlots.set(slotKey,slot+1);n.x=190+Number(level)*230;n.slot=slot});
+  const laneHeights=new Map(graph.lanes.map(lane=>[lane,Math.max(145,100+Math.max(0,...[...laneSlots].filter(([key])=>key.startsWith(lane+':')).map(([,count])=>count-1))*90)]));
+  let laneTop=0;graph.lanes.forEach(lane=>{graph.nodes.filter(n=>n.lane===lane).forEach(n=>n.y=laneTop+42+n.slot*90);laneTop+=laneHeights.get(lane)});
+  // 配置済みのノードと接続線も返す。寸法だけを返すと、描画処理で
+  // graph.nodes が undefined になりプレビュー全体が停止してしまう。
+  return{...graph,levels,laneHeights,width:Math.max(760,260+(Math.max(0,...levels.values())+1)*230),height:Math.max(360,laneTop)};
+}
+function edgePath(a,b){const aw=a.type==='decision'?112:166,ah=a.type==='decision'?90:62,bw=b.type==='decision'?112:166,bh=b.type==='decision'?90:62;const x1=a.x+aw,y1=a.y+ah/2,x2=b.x,y2=b.y+bh/2,m=(x1+x2)/2;return{d:`M${x1},${y1} H${m} V${y2} H${x2}`,lx:m+5,ly:(y1+y2)/2-7}}
+function render(){
+  try{
+    const graph=layout(parse(source.value)),theme=themes[$('#theme').value]||themes.blue;$('#status').textContent=graph.nodes.length?`${graph.lanes.length}レーン・${graph.nodes.length}工程`:' ';$('#status').className='status';$('#empty').style.display=graph.nodes.length?'none':'grid';
+    svg.setAttribute('viewBox',`0 0 ${graph.width} ${graph.height}`);svg.style.width=graph.width+'px';svg.style.height=graph.height+'px';
+    const byId=new Map(graph.nodes.map(n=>[n.id,n]));let laneY=0;
+    const lanes=graph.lanes.map((lane,index)=>{const height=graph.laneHeights.get(lane),markup=`<rect x="0" y="${laneY}" width="${graph.width}" height="${height}" fill="${index%2?theme.lane2:theme.lane1}" stroke="#dbe1ea"/><rect x="0" y="${laneY}" width="150" height="${height}" fill="${index%2?theme.head2:theme.head1}" stroke="#dbe1ea"/>${svgText(lane,75,laneY+height/2+5,8)}`;laneY+=height;return markup}).join('');
+    const edges=graph.edges.map(e=>{const p=edgePath(byId.get(e.from),byId.get(e.to));return`<path d="${p.d}" fill="none" stroke="#8b97aa" stroke-width="2" marker-end="url(#arrow)"/>${e.label?`<text x="${p.lx}" y="${p.ly}" font-size="11" fill="#536074" paint-order="stroke" stroke="#fafbfd" stroke-width="5">${escapeHtml(e.label)}</text>`:''}`}).join('');
+    const nodes=graph.nodes.map(n=>{const x=n.x,y=n.y;if(n.type==='decision')return`<polygon points="${x+56},${y} ${x+112},${y+45} ${x+56},${y+90} ${x},${y+45}" fill="#fffaf0" stroke="${theme.decision}" stroke-width="2"/>${svgText(n.label,x+56,y+49,9)}`;return`<rect x="${x}" y="${y}" width="166" height="62" rx="${n.type==='terminal'?31:8}" fill="${n.type==='terminal'?'#f1fbf7':'#fff'}" stroke="${n.type==='terminal'?theme.terminal:theme.process}" stroke-width="2"/>${svgText(n.label,x+83,y+36,12)}`}).join('');
+    svg.innerHTML=`<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3z" fill="#8b97aa"/></marker></defs>${lanes}${edges}${nodes}`;
+  }catch(error){$('#status').textContent=error.message;$('#status').className='status error';svg.innerHTML=''}
+}
+let timer;source.addEventListener('input',()=>{render();$('#saved').textContent='保存中…';clearTimeout(timer);timer=setTimeout(()=>{storageSet('simple-flow-source',source.value);$('#saved').textContent='自動保存済み'},350)});
+$('#flowName').addEventListener('input',e=>storageSet('simple-flow-name',e.target.value));
+$('#theme').value=storageGet('simple-flow-theme','blue');$('#theme').onchange=e=>{storageSet('simple-flow-theme',e.target.value);render()};
+$('#helpBtn').onclick=()=>$('#examples').classList.toggle('show');document.querySelectorAll('[data-example]').forEach(b=>b.onclick=()=>{source.value=examples[b.dataset.example];source.dispatchEvent(new Event('input'));$('#examples').classList.remove('show')});
+$('#resetBtn').onclick=()=>{if(confirm('入力内容を消して新しく作成しますか？')){source.value='開始 → ';source.dispatchEvent(new Event('input'));source.focus()}};
+function toast(text){const el=$('#toast');el.textContent=text;el.classList.add('show');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>el.classList.remove('show'),1600)}
+$('#copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(source.value);toast('入力内容をコピーしました')}catch{source.select();document.execCommand('copy');toast('入力内容をコピーしました')}};
+$('#loadBtn').onclick=()=>$('#fileInput').click();$('#fileInput').onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{source.value=String(reader.result||'');source.dispatchEvent(new Event('input'));toast('テキストを読み込みました')};reader.onerror=()=>toast('ファイルを読み込めませんでした');reader.readAsText(file);e.target.value=''};
+function setZoom(value){zoom=Math.max(.5,Math.min(1.5,value));svg.style.transform=`scale(${zoom})`;$('#zoomValue').textContent=Math.round(zoom*100)+'%'}
+$('#zoomIn').onclick=()=>setZoom(zoom+.1);$('#zoomOut').onclick=()=>setZoom(zoom-.1);$('#fitBtn').onclick=()=>{const box=document.querySelector('.canvas'),view=svg.viewBox.baseVal;if(!view.width)return;setZoom(Math.min(1,(box.clientWidth-30)/view.width));box.scrollTo(0,0)};
+$('#downloadBtn').onclick=()=>{if(!svg.innerHTML)return;const copy=svg.cloneNode(true),view=svg.viewBox.baseVal;copy.setAttribute('xmlns','http://www.w3.org/2000/svg');copy.setAttribute('width',view.width);copy.setAttribute('height',view.height);copy.style.transform='';const blob=new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'}),a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=($('#flowName').value||'業務フロー')+'.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('画像を保存しました')};
+$('#pngBtn').onclick=()=>{if(!svg.innerHTML)return;const copy=svg.cloneNode(true),view=svg.viewBox.baseVal,scale=2;copy.setAttribute('xmlns','http://www.w3.org/2000/svg');copy.setAttribute('width',view.width);copy.setAttribute('height',view.height);copy.style.transform='';const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'})),img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=view.width*scale;canvas.height=view.height*scale;const context=canvas.getContext('2d');context.scale(scale,scale);context.fillStyle='#fff';context.fillRect(0,0,view.width,view.height);context.drawImage(img,0,0);URL.revokeObjectURL(url);canvas.toBlob(blob=>{if(!blob)return toast('PNGを作成できませんでした');const a=document.createElement('a'),pngUrl=URL.createObjectURL(blob);a.href=pngUrl;a.download=($('#flowName').value||'業務フロー')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(pngUrl),1000);toast('PNG画像を保存しました')},'image/png')};img.onerror=()=>{URL.revokeObjectURL(url);toast('PNGを作成できませんでした')};img.src=url};
+render();
+</script>
+</body>
+</html>
