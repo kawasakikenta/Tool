@@ -9,42 +9,88 @@
     :root { --blue:#356ae6; --ink:#182235; --muted:#768196; --line:#e1e5ec; --bg:#f5f7fa; --red:#d95663; }
     * { box-sizing:border-box; }
     html, body { height:100%; margin:0; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif; color:var(--ink); }
-    button, input, textarea { font:inherit; }
+    button, input, textarea, select { font:inherit; }
     button { cursor:pointer; }
+    button:focus-visible, select:focus-visible { outline:3px solid #a8c3ff; outline-offset:3px; }
+    .icon { width:18px; height:18px; flex-shrink:0; vertical-align:middle; pointer-events:none; }
     .app { height:100%; display:grid; grid-template-rows:60px 1fr; }
     header { display:flex; align-items:center; gap:12px; padding:0 22px; border-bottom:1px solid var(--line); background:#fff; }
     .logo { width:32px; height:32px; display:grid; place-items:center; border-radius:9px; background:var(--blue); color:#fff; font-weight:800; }
     header h1 { margin:0; font-size:16px; }
     .saved { color:#8a94a5; font-size:11px; display:flex; align-items:center; gap:6px; }
     .saved::before { content:""; width:6px; height:6px; border-radius:50%; background:#27a473; }
+    .saved.error { color:var(--red); }
+    .saved.error::before { background:var(--red); }
     .actions { margin-left:auto; display:flex; gap:8px; }
-    .btn { border:1px solid var(--line); border-radius:8px; padding:8px 12px; background:#fff; color:#536074; font-weight:650; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:38px; white-space:nowrap; border:1px solid var(--line); border-radius:8px; padding:8px 12px; background:#fff; color:#536074; font-size:12px; font-weight:650; }
     .btn:hover { background:#f7f9fc; }
     .btn.primary { color:#fff; background:var(--blue); border-color:var(--blue); }
-    main { min-height:0; display:grid; grid-template-columns:minmax(340px, 42%) 1fr; }
-    .editor { min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--line); background:#fff; }
+    main { min-height:0; display:grid; grid-template-columns:minmax(340px, 42%) 1fr; grid-template-rows:minmax(0,1fr); }
+    .editor { min-width:0; min-height:0; display:flex; flex-direction:column; border-right:1px solid var(--line); background:#fff; }
     .panel-head { min-height:58px; display:flex; align-items:center; padding:0 20px; border-bottom:1px solid var(--line); }
     .panel-head h2 { font-size:13px; margin:0; }
-    .panel-head span { margin-left:8px; font-size:11px; color:var(--muted); }
-    .help-btn { margin-left:auto; border:0; background:#eef3ff; color:var(--blue); border-radius:7px; padding:6px 9px; font-weight:700; }
-    .guide { margin:14px 16px 0; padding:12px 14px; border-radius:9px; background:#f4f7ff; color:#58667c; font-size:11px; line-height:1.7; }
+    .panel-head > span { margin-left:8px; font-size:11px; color:var(--muted); }
+    .help-btn { display:inline-flex; align-items:center; gap:5px; min-height:34px; margin-left:auto; border:0; background:#eef3ff; color:var(--blue); border-radius:7px; padding:6px 9px; font-size:12px; font-weight:700; }
+    .help-btn:hover,.help-btn[aria-expanded="true"] { background:#dde8ff; }
+    .insert-toolbar { padding:14px 16px 12px; border-bottom:1px solid #edf0f5; }
+    .toolbar-label { display:block; color:#7b879b; font-size:11px; margin-bottom:9px; }
+    .insert-buttons { display:flex; flex-wrap:wrap; gap:6px; }
+    .insert-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:38px; padding:7px 9px; border:1px solid #dfe5ef; border-radius:8px; background:#fff; color:#4d5e78; font-size:12px; font-weight:650; }
+    .insert-btn:hover { background:#f2f6ff; border-color:#a8bfea; box-shadow:0 2px 5px #2645760c; }
+    .insert-btn[data-insert="process"] .icon { color:#527acb; }
+    .insert-btn[data-insert="terminal"] .icon { color:#268363; }
+    .insert-btn[data-insert="decision"] .icon { color:#b77c14; }
+    .guide { display:flex; align-items:flex-start; gap:8px; margin:12px 16px 0; padding:10px 12px; border-radius:9px; background:#f4f7ff; color:#58667c; font-size:11px; line-height:1.7; }
+    .guide > .icon { color:#668be0; width:16px; height:16px; margin-top:2px; }
     .guide b { color:#315cb8; }
     .guide code { background:#fff; border:1px solid #dce5fb; border-radius:4px; padding:1px 4px; }
     textarea { flex:1; min-height:0; resize:none; margin:14px 16px 16px; padding:16px; border:1px solid #d9dee7; border-radius:10px; outline:0; color:#26344a; background:#fbfcfe; font:14px/1.9 ui-monospace,SFMono-Regular,Consolas,"Noto Sans Mono",monospace; tab-size:2; }
     textarea:focus { border-color:#8eabed; box-shadow:0 0 0 3px #edf3ff; background:#fff; }
     .preview { min-width:0; min-height:0; position:relative; display:flex; flex-direction:column; background:var(--bg); }
     .preview .panel-head { background:#fff; }
-    .flow-name { border:1px solid transparent; padding:6px 8px; border-radius:6px; font-weight:750; outline:0; width:260px; }
+    .flow-name { min-width:0; flex:1; border:1px solid transparent; padding:6px 8px; border-radius:6px; font-weight:750; outline:0; width:180px; }
     .flow-name:hover { border-color:var(--line); }
     .flow-name:focus { border-color:#9ab4ef; }
     .status { margin-left:auto; color:var(--muted); font-size:11px; }
     .status.error { color:var(--red); }
-    .preview-tools { display:flex; align-items:center; gap:5px; margin-left:12px; }
-    .preview-tools button,.preview-tools select { height:30px; border:1px solid var(--line); border-radius:6px; background:#fff; color:#5b6678; padding:0 8px; font-size:11px; }
+    .preview-tools { display:flex; flex-shrink:0; align-items:center; gap:5px; margin-left:10px; }
+    .preview-tools button,.preview-tools select { height:34px; border:1px solid var(--line); border-radius:6px; background:#fff; color:#5b6678; padding:0 8px; font-size:11px; }
+    .preview-tools button { display:inline-flex; align-items:center; justify-content:center; gap:5px; }
+    .preview-tools .icon { width:16px; height:16px; }
     .preview-tools button:hover { background:#f2f5fa; }
     .preview-tools .zoom-value { min-width:42px; text-align:center; color:#8791a2; font-size:10px; }
     .canvas { flex:1; min-height:0; overflow:auto; padding:35px; background-color:#fafbfd; background-image:radial-gradient(#d8dde5 1px, transparent 1px); background-size:20px 20px; }
-    #diagram { display:block; min-width:100%; min-height:100%; overflow:visible; transform-origin:top left; transition:transform .15s; }
+    #diagram { display:block; overflow:visible; margin-inline:auto; }
+    .edge-guide { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 16px; background:#fff; border-bottom:1px solid var(--line); font-size:11px; color:#768196; }
+    .edge-guide .btn { min-height:32px; padding:5px 9px; color:#315cb8; }
+    button:disabled { cursor:default; opacity:.45; }
+    .flow-edge,.flow-node,.flow-lane,.flow-jump { cursor:pointer; outline:none; }
+    .flow-node:hover .node-shape,.flow-node:focus .node-shape,.flow-node.is-target .node-shape { stroke:#356ae6; stroke-width:3; filter:drop-shadow(0 0 5px #356ae640); }
+    .flow-lane:hover .lane-head,.flow-lane:focus .lane-head { fill:#e2ebff; }
+    .flow-jump:hover rect,.flow-jump:focus rect { stroke-width:3; }
+    .display-tools { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; padding:8px 16px; background:#fff; border-bottom:1px solid var(--line); font-size:11px; color:#536074; }
+    .display-tools label { display:flex; align-items:center; gap:6px; }
+    .display-tools select { max-width:145px; min-height:32px; padding:5px 7px; border:1px solid var(--line); border-radius:6px; background:#fff; color:#26344a; }
+    .edge-guide,.display-tools { flex-wrap:wrap; flex-shrink:0; }
+    .edit-actions { display:flex; gap:6px; }
+    .flow-edge:hover .edge-line,.flow-edge:focus .edge-line,.flow-edge.is-selected .edge-line { stroke:#356ae6; stroke-width:3; }
+    .flow-edge:hover .edge-label-bg,.flow-edge:focus .edge-label-bg,.flow-edge.is-selected .edge-label-bg { stroke:#356ae6; }
+    .flow-edge:focus .edge-hit { stroke:#356ae630; }
+    .edge-dialog { width:min(560px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:auto; border:1px solid #d9e1ee; border-radius:16px; padding:24px; color:var(--ink); box-shadow:0 20px 70px #15233a40; }
+    .edge-dialog::backdrop { background:#14243c66; }
+    .dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+    .dialog-heading h2 { margin:0; font-size:18px; }
+    .dialog-heading button { border:0; background:#f1f4f9; border-radius:8px; padding:9px; display:flex; color:#58667c; }
+    .edge-dialog label { display:block; font-size:12px; font-weight:700; margin-bottom:7px; }
+    .edge-dialog input,.edge-dialog select { display:block; width:100%; min-height:42px; padding:9px 11px; border:1px solid #d9e1ee; border-radius:8px; color:var(--ink); background:#fff; font-size:13px; }
+    .edge-dialog input:focus { outline:3px solid #e2ebff; border-color:#8eabed; }
+    .edge-section { border-top:1px solid var(--line); padding-top:18px; margin-top:18px; }
+    .edge-section h3 { display:flex; align-items:center; gap:8px; font-size:14px; margin:0 0 12px; }
+    .edge-section .icon { color:var(--blue); }
+    .edge-dialog p { font-size:12px; color:#768196; line-height:1.6; margin:8px 0 12px; }
+    .edge-fields { display:grid; grid-template-columns:130px 1fr; gap:12px; }
+    .edge-dialog .form-actions { display:flex; justify-content:flex-end; margin-top:12px; }
+    .edge-dialog .form-error { color:var(--red); margin-bottom:0; }
     .legend { position:absolute; right:16px; bottom:16px; display:flex; gap:12px; padding:8px 11px; border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.94); color:#748095; font-size:10px; box-shadow:0 3px 12px #26334b12; }
     .legend span { display:flex; align-items:center; gap:5px; }
     .legend i { display:inline-block; width:18px; height:11px; border:2px solid #668be0; border-radius:3px; }
@@ -52,35 +98,141 @@
     .legend .decision { width:11px; height:11px; border-color:#dca63a; border-radius:1px; transform:rotate(45deg); margin:0 3px; }
     .empty { position:absolute; inset:58px 0 0; display:grid; place-items:center; color:#909aaa; text-align:center; pointer-events:none; }
     .empty b { display:block; color:#606d81; margin-bottom:7px; }
-    .examples { display:none; position:absolute; inset:58px 0 0; z-index:10; background:rgba(245,247,250,.96); padding:30px; overflow:auto; }
+    .examples { display:none; position:absolute; inset:0; z-index:10; background:rgba(245,247,250,.98); padding:22px; overflow:auto; }
     .examples.show { display:block; }
+    .examples-head { max-width:640px; margin:0 auto 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .examples-head h2 { margin:0; font-size:15px; }
+    .examples-head button { display:inline-flex; align-items:center; gap:5px; min-height:36px; padding:6px 9px; border:1px solid var(--line); border-radius:7px; background:#fff; color:#536074; }
     .example-card { max-width:640px; margin:0 auto 12px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:15px; }
     .example-card h3 { margin:0 0 8px; font-size:13px; }
     .example-card pre { margin:0; white-space:pre-wrap; color:#58667b; font:12px/1.7 ui-monospace,monospace; }
-    .example-card button { margin-top:10px; color:var(--blue); border:0; background:#edf3ff; border-radius:6px; padding:6px 9px; font-weight:700; }
+    .example-card button { display:inline-flex; align-items:center; gap:6px; min-height:36px; margin-top:10px; color:var(--blue); border:0; background:#edf3ff; border-radius:6px; padding:6px 9px; font-weight:700; }
     .toast { position:fixed; left:50%; bottom:22px; transform:translate(-50%,10px); opacity:0; background:#172033; color:#fff; border-radius:8px; padding:10px 15px; font-size:12px; transition:.2s; z-index:30; }
     .toast.show { opacity:1; transform:translate(-50%,0); }
-    @media (max-width:760px) { main { grid-template-columns:1fr; grid-template-rows:47% 53%; } .editor { border-right:0; border-bottom:1px solid var(--line); } .panel-head { min-height:46px; } .guide,.legend { display:none; } textarea { margin:9px; padding:12px; } .canvas { padding:20px; } header { padding:0 10px; } header h1,.saved,.actions .text,.preview-tools select { display:none; } .flow-name{width:150px}.preview-tools{margin-left:5px}.status{display:none} }
+    @media (max-width:1100px) { .app { grid-template-rows:auto minmax(0,1fr); } header { min-height:60px; padding-top:10px; padding-bottom:10px; } .actions { flex-wrap:wrap; justify-content:flex-end; } .saved,.status { display:none; } header h1 { font-size:14px; white-space:nowrap; } .panel-head { padding:0 12px; } .editor .panel-head > span { display:none; } }
+    @media (max-width:760px) { main { grid-template-columns:1fr; grid-template-rows:53% 47%; } .editor { border-right:0; border-bottom:1px solid var(--line); } .panel-head { min-height:48px; flex-shrink:0; } .guide,.legend,header h1 { display:none; } textarea { margin:9px; padding:12px; min-height:70px; } .canvas { padding:20px; } header { padding:8px 10px; gap:8px; } .logo { flex-shrink:0; } .actions { gap:5px; } .btn { padding:7px 9px; min-height:40px; gap:5px; } .insert-toolbar { padding:10px; } .toolbar-label { margin-bottom:7px; } .insert-buttons { gap:5px; } .insert-btn { padding:7px; min-height:40px; gap:4px; } .preview .panel-head { flex-wrap:wrap; gap:6px; padding:8px 10px; } .flow-name { flex:1 1 100px; } .preview-tools { margin-left:0; } .preview-tools select { width:76px; padding:0 4px; } .preview-tools button { padding:0 6px; min-height:36px; } .preview-tools .zoom-value { min-width:34px; } .examples { padding:16px; } }
+    @media (max-height:640px) and (max-width:760px) { .editor { overflow:auto; } main { grid-template-rows:55% 45%; } textarea { flex:1 0 110px; } }
+    @media (max-width:760px) { .edge-guide { padding:6px 10px; } .edge-guide span { max-width:190px; line-height:1.5; } .edge-dialog { padding:18px; } .edge-fields { grid-template-columns:1fr; gap:12px; } }
+    @media (max-width:760px) { main { grid-template-rows:42% 58%; } .display-tools { padding:6px 10px; gap:6px 12px; } .edge-guide { gap:5px; } .edge-guide > span { max-width:none; } .edge-guide .btn { min-height:34px; } }
+    body.visual-mode main { grid-template-columns:280px minmax(0,1fr); }
+    body.visual-mode .editor > .insert-toolbar,body.visual-mode .editor > .guide,body.visual-mode #source { display:none; }
+    body.text-mode .visual-editor { display:none; }
+    .editor .panel-head { flex-shrink:0; }
+    .mode-switch { display:flex; gap:4px; padding:8px 12px; border-bottom:1px solid var(--line); flex-shrink:0; }
+    .mode-switch button { flex:1; border:0; padding:8px 10px; border-radius:7px; background:#f2f4f8; color:#6d798d; font-size:12px; }
+    .mode-switch button[aria-pressed="true"] { background:#e9f0ff; color:#315cb8; font-weight:700; }
+    .visual-editor { flex:1; overflow:auto; min-height:0; padding:16px; font-size:12px; }
+    .visual-editor h3 { margin:0 0 10px; font-size:12px; }
+    .palette { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:20px; }
+    .palette .btn { justify-content:flex-start; padding:9px; }
+    .inspector { border-top:1px solid var(--line); padding-top:16px; }
+    .inspector label { display:block; margin:12px 0 6px; color:#617087; font-size:11px; }
+    .inspector input,.inspector select { width:100%; min-height:36px; padding:8px; border:1px solid #d9e1ee; border-radius:7px; background:#fff; color:var(--ink); font-size:12px; }
+    .inspector .field-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .inspector .btn { width:100%; margin-top:10px; }
+    .inspector-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+    .danger { color:#b84e59!important; }
+    .panel-tip { color:#7b879b; font-size:11px; line-height:1.8; margin:14px 0; }
+    .inspector-empty { padding:16px 10px; border:1px dashed #dce3ef; border-radius:10px; color:#7b879b; line-height:1.9; text-align:center; }
+    .canvas { position:relative; }
+    .flow-node,.media-card { cursor:grab; touch-action:none; user-select:none; outline:none; }
+    .media-card.is-selected .media-frame,.media-card:focus .media-frame { stroke:#356ae6; stroke-width:3; }
+    .media-card .resize-handle { display:none; cursor:nwse-resize; }
+    .media-card.is-selected .resize-handle { display:block; }
+    .media-open { cursor:pointer; }
+    .canvas.drop-active { box-shadow:inset 0 0 0 4px #7da5f5; background-color:#eef4ff; }
+    .media-tip { margin:-8px 0 16px; font-size:11px; line-height:1.7; color:#748095; }
+    .inspector .check-label { display:flex; align-items:center; gap:7px; }
+    .inspector .check-label input { width:auto; min-height:0; }
+    .media-link { display:block; word-break:break-all; color:#356ae6; font-size:11px; line-height:1.7; margin-top:10px; }
+    .embed-container { height:100%; background:#fff; }
+    .embed-container iframe { display:block; width:100%; height:100%; border:0; }
+    .flow-node.is-selected .node-shape { stroke:#356ae6; stroke-width:3; filter:drop-shadow(0 0 4px #356ae650); }
+    .flow-node.is-selected .selection-ring { display:block; }
+    .selection-ring { display:none; pointer-events:none; }
+    .connecting .flow-node { cursor:crosshair; }
+    .connecting .flow-node:hover .node-shape { stroke:#168575; stroke-width:4; }
+    .dragging,.dragging .flow-node { cursor:grabbing; }
+    .display-tools .btn { min-height:30px; padding:5px 8px; }
+    .display-tools input[type="checkbox"] { accent-color:var(--blue); }
+    .form-error { color:#b84e59; font-size:12px; }
+    [hidden] { display:none!important; }
+    @media(max-width:760px){ body.visual-mode main { grid-template-columns:1fr; grid-template-rows:36% 64%; } .visual-editor { padding:10px; } .palette { grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:10px; } .palette .btn { font-size:10px; padding:6px; gap:3px; } .palette .icon { width:14px; } .mode-switch { padding:5px 10px; } .inspector { padding-top:10px; } .legend { display:none; } }
   </style>
 </head>
-<body>
+<body class="visual-mode">
 <div class="app">
   <header>
-    <div class="logo">→</div><h1>かんたん業務フロー作成</h1>
-    <span class="saved" id="saved">自動保存済み</span>
-    <div class="actions"><button class="btn" id="resetBtn">新規</button><button class="btn" id="loadBtn"><span class="text">テキスト</span>読込</button><button class="btn" id="copyBtn">コピー</button><button class="btn" id="pngBtn">PNG</button><button class="btn primary" id="downloadBtn"><span class="text">SVGを</span>保存</button></div>
+    <div class="logo" data-icon="workflow" aria-hidden="true"></div><h1>かんたん業務フロー作成</h1>
+    <span class="saved" id="saved" role="status">自動保存</span>
+    <div class="actions">
+      <button class="btn" id="resetBtn" data-icon="filePlus" title="入力内容を消して、新しいフローを作成">新規</button>
+      <button class="btn" id="loadBtn" data-icon="folder" title="保存したボード（画像付き）やテキストを読み込む">読込</button>
+      <button class="btn primary" id="saveBoardBtn" data-icon="save" title="画像も含めた編集用ボードを保存">ボード保存</button>
+      <button class="btn" id="saveTextBtn" data-icon="save" title="図形と設定をテキスト保存（画像データはボード保存）">TXT保存</button>
+      <button class="btn" id="copyBtn" data-icon="copy" title="入力したテキストをクリップボードにコピー">コピー</button>
+      <button class="btn" id="pngBtn" data-icon="image" title="高解像度のPNG画像を保存">PNG保存</button>
+      <button class="btn" id="downloadBtn" data-icon="download" title="拡大してもきれいなSVG画像を保存">SVG保存</button>
+    </div>
   </header>
   <main>
     <section class="editor">
-      <div class="panel-head"><h2>フローを入力</h2><span>入力すると自動で反映</span><button class="help-btn" id="helpBtn">書き方</button></div>
-      <div class="guide"><b>「担当者名:」の下に工程を書くだけ。</b><br><code>営業:</code><br><code>受付 → 内容確認 → 見積作成</code><br>担当者ごとのスイムレーンを自動作成します。</div>
+      <div class="panel-head"><h2>編集パネル</h2><button class="help-btn" id="helpBtn" data-icon="help" aria-expanded="false" aria-controls="examples" title="書き方とサンプルを見る">使い方</button></div>
+      <div class="mode-switch" role="group" aria-label="編集方法"><button id="visualModeBtn" aria-pressed="true">図で編集</button><button id="textModeBtn" aria-pressed="false">テキスト</button></div>
+      <div class="visual-editor">
+        <h3>図形を追加</h3>
+        <div class="palette"><button class="btn" data-add="process" data-icon="process">処理</button><button class="btn" data-add="decision" data-icon="decision">判断</button><button class="btn" data-add="terminal" data-icon="terminal">開始・終了</button><button class="btn" id="addLaneBtn" data-icon="lanes">担当</button><button class="btn" id="addImageBtn" data-icon="image">画像</button><button class="btn" id="addEmbedBtn" data-icon="link">リンク</button></div>
+        <p class="media-tip">画像は Ctrl+V またはドロップで追加。<br>枠付きカードになり、右下でサイズ変更できます。</p>
+        <div class="inspector-empty" id="inspectorEmpty">図形をクリックして選択<br>ドラッグで好きな位置に移動</div>
+        <section class="inspector" id="inspector" aria-label="選択した図形の編集" hidden>
+          <h3>選択した図形</h3>
+          <form id="inspectorForm">
+            <label for="shapeName">図形の名前</label><input id="shapeName" maxlength="120" autocomplete="off" required>
+            <div class="field-row"><div><label for="shapeType">図形の種類</label><select id="shapeType"><option value="process">処理</option><option value="decision">判断</option><option value="terminal">開始・終了</option></select></div><div><label for="nodeColor">図形の色</label><select id="nodeColor"><option value="auto">標準</option><option value="blue">ブルー</option><option value="green">グリーン</option><option value="orange">オレンジ</option><option value="purple">パープル</option><option value="pink">ピンク</option></select></div></div>
+            <label for="nodeLane">担当レーン</label><select id="nodeLane"></select>
+            <p class="form-error" id="inspectorError" role="alert" hidden></p>
+            <button class="btn primary" type="submit" data-icon="check">変更を反映</button>
+          </form>
+          <button class="btn" id="connectBtn" data-icon="arrow" aria-pressed="false">この図形からつなぐ</button>
+          <div class="inspector-actions"><button class="btn" id="duplicateBtn" data-icon="copy">複製</button><button class="btn danger" id="deleteNodeBtn" data-icon="trash">削除</button></div>
+        </section>
+        <section class="inspector" id="mediaInspector" aria-label="選択したカードの編集" hidden>
+          <h3 id="mediaHeading">画像カード</h3>
+          <form id="mediaForm">
+            <label for="mediaTitle">カードのタイトル</label><input id="mediaTitle" maxlength="100" autocomplete="off">
+            <div class="field-row"><div><label for="mediaWidth">幅</label><input id="mediaWidth" type="number" min="120" max="2000" step="1" required></div><div><label for="mediaHeight">高さ</label><input id="mediaHeight" type="number" min="90" max="1800" step="1" required></div></div>
+            <label class="check-label"><input id="mediaAspect" type="checkbox" checked>画像の比率を保つ</label>
+            <label for="mediaBorder">枠の色</label><select id="mediaBorder"><option value="gray">グレー</option><option value="blue">ブルー</option><option value="green">グリーン</option><option value="purple">パープル</option></select>
+            <button class="btn primary" type="submit" data-icon="check">カードを更新</button>
+          </form>
+          <button class="btn" id="previewEmbedBtn" data-icon="link" hidden>埋め込みを表示</button>
+          <a class="media-link" id="mediaLink" target="_blank" rel="noopener noreferrer" hidden>リンクを開く ↗</a>
+          <div class="inspector-actions"><button class="btn" id="duplicateMediaBtn" data-icon="copy">複製</button><button class="btn danger" id="deleteMediaBtn" data-icon="trash">削除</button></div>
+          <p class="panel-tip" id="mediaHelp">画像を含めて保存するには「ボード保存」を使います。</p>
+        </section>
+        <p class="panel-tip">ドラッグで配置・ダブルクリックで文字編集。接続は始点を選んで「つなぐ」、次に終点をクリック。<br>Ctrl+Zで戻す / Ctrl+Dで複製 / Deleteで削除</p>
+      </div>
+      <div class="insert-toolbar" role="group" aria-label="図形の入力補助">
+        <span class="toolbar-label">ボタンで追加して、名前を書き換える</span>
+        <div class="insert-buttons">
+          <button class="insert-btn" data-insert="lane" data-icon="lanes" title="担当者・部署のレーンを追加">担当</button>
+          <button class="insert-btn" data-insert="terminal" data-icon="terminal" title="開始・終了の図形をカーソル位置に追加">開始・終了</button>
+          <button class="insert-btn" data-insert="process" data-icon="process" title="処理の図形をカーソル位置に追加">処理</button>
+          <button class="insert-btn" data-insert="decision" data-icon="decision" title="条件分岐の図形をカーソル位置に追加">判断</button>
+          <button class="insert-btn" data-insert="arrow" data-icon="arrow" title="工程をつなぐ矢印をカーソル位置に挿入">矢印</button>
+        </div>
+      </div>
+      <div class="guide" data-icon="info"><div><b>担当者名の下に、工程を矢印でつなぎます。</b><br><code>営業:</code> の下に <code>受付 → 内容確認 → 見積作成</code></div></div>
       <textarea id="source" spellcheck="false" aria-label="業務フローの入力欄"></textarea>
     </section>
     <section class="preview">
-      <div class="panel-head"><input class="flow-name" id="flowName" value="受注業務フロー" aria-label="フロー名"><span class="status" id="status"></span><div class="preview-tools"><select id="theme" aria-label="配色"><option value="blue">ブルー</option><option value="green">グリーン</option><option value="mono">モノクロ</option></select><button id="zoomOut" title="縮小">−</button><span class="zoom-value" id="zoomValue">100%</span><button id="zoomIn" title="拡大">＋</button><button id="fitBtn" title="全体表示">全体</button></div></div>
-      <div class="canvas"><svg id="diagram" xmlns="http://www.w3.org/2000/svg"></svg></div>
-      <div class="empty" id="empty"><div><b>左側に工程を入力してください</b>入力した内容がここに図で表示されます</div></div>
-      <div class="examples" id="examples">
+      <div class="panel-head"><input class="flow-name" id="flowName" value="受注業務フロー" aria-label="フロー名"><span class="status" id="status"></span><div class="preview-tools"><select id="theme" aria-label="配色"><option value="blue">ブルー</option><option value="green">グリーン</option><option value="mono">モノクロ</option></select><button id="zoomOut" data-icon="zoomOut" title="縮小" aria-label="図を縮小"></button><span class="zoom-value" id="zoomValue">100%</span><button id="zoomIn" data-icon="zoomIn" title="拡大" aria-label="図を拡大"></button><button id="fitBtn" data-icon="fit" title="図全体を画面内に収める">全体</button></div></div>
+      <div class="display-tools"><button class="btn" id="undoBtn" data-icon="undo" title="元に戻す（Ctrl+Z）">戻す</button><button class="btn" id="redoBtn" data-icon="redo" title="やり直す（Ctrl+Shift+Z）">やり直す</button><label for="orientation">向き <select id="orientation" aria-label="図の向き"><option value="horizontal">横方向 →</option><option value="vertical">縦方向 ↓</option></select></label><label for="longLinks">遠い線 <select id="longLinks"><option value="line">線で表示</option><option value="auto">番号で自動省略</option></select></label><button class="btn" id="arrangeBtn" data-icon="fit">自動整列</button><label><input id="snapGrid" type="checkbox" checked>グリッド</label></div>
+      <div class="edge-guide"><span id="interactionHint" role="status">図形を選んで編集。ドラッグで移動できます</span><div class="edit-actions"><button class="btn" id="cancelConnectBtn" hidden>接続をキャンセル</button><button class="btn" id="editTextBtn" data-icon="text">文字を編集</button><button class="btn" id="editEdgeBtn" data-icon="editLine" title="編集する接続線を選ぶ">線を編集</button></div></div>
+      <div class="canvas"><svg id="diagram" xmlns="http://www.w3.org/2000/svg" aria-label="業務フロー図"></svg></div>
+      <div class="empty" id="empty"><div><b>「処理」「判断」から図形を追加</b>ドラッグして並べ、図形同士をつなげます</div></div>
+      <div class="examples" id="examples" role="region" aria-label="書き方とサンプル">
+        <div class="examples-head"><h2>書き方とサンプル</h2><button id="closeExamples" data-icon="close" aria-label="書き方を閉じる">閉じる</button></div>
         <div class="example-card"><h3>担当ごとのスイムレーン</h3><pre>営業:
 問い合わせ受付 → 内容確認 → 見積作成
 責任者:
@@ -98,8 +250,71 @@
       <div class="legend"><span><i class="terminal"></i>開始・終了</span><span><i></i>処理</span><span><i class="decision"></i>判断</span></div>
     </section>
   </main>
-</div><input type="file" id="fileInput" accept=".txt,text/plain" hidden><div class="toast" id="toast"></div>
+</div><input type="file" id="fileInput" accept=".txt,.json,text/plain,application/json" hidden><input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" multiple hidden><div class="toast" id="toast" role="status"></div>
+<dialog class="edge-dialog" id="embedDialog" aria-labelledby="embedDialogTitle">
+  <div class="dialog-heading"><h2 id="embedDialogTitle">リンク・埋め込みを追加</h2><button id="closeEmbedDialog" type="button" data-icon="close" aria-label="リンクの追加を閉じる"></button></div>
+  <form id="embedForm"><label for="embedUrl">URL</label><input id="embedUrl" type="url" placeholder="https://…" required autocomplete="off"><label for="embedTitle">タイトル（省略可）</label><input id="embedTitle" maxlength="100" autocomplete="off"><p>まずリンクカードを置きます。「埋め込みを表示」を押すと、ボード内で開きます。サイト側の制限で表示できない場合は、リンクから開けます。</p><p id="embedError" class="form-error" role="alert" hidden></p><div class="form-actions"><button class="btn primary" type="submit" data-icon="filePlus">カードを追加</button></div></form>
+</dialog>
+<dialog class="edge-dialog" id="edgeDialog" aria-labelledby="edgeDialogTitle">
+  <div class="dialog-heading"><h2 id="edgeDialogTitle">線を編集</h2><button type="button" id="closeEdgeDialog" data-icon="close" aria-label="線の編集を閉じる"></button></div>
+  <label for="edgeSelect">編集する線</label><select id="edgeSelect"></select>
+  <form class="edge-section" id="edgeLabelForm">
+    <h3 data-icon="text">線の文字・表示方法</h3>
+    <label for="edgeLabel">線に表示する文字</label><input id="edgeLabel" maxlength="80" placeholder="例：承認済み、はい、3日後" autocomplete="off">
+    <p>空欄にすると文字を消せます。</p>
+    <label for="edgeMode">接続の表示方法</label><select id="edgeMode"><option value="default">「遠い線」の設定に従う</option><option value="line">線で表示</option><option value="jump">番号で省略（③へ）</option></select>
+    <p>番号を押すと接続先へ移動します。同じ番号が付いた図形につながっています。</p>
+    <div class="form-actions"><button class="btn primary" type="submit" data-icon="check">変更を反映</button></div>
+  </form>
+  <form class="edge-section" id="edgeNodeForm">
+    <h3 data-icon="process">線の途中に図形を挿入</h3>
+    <div class="edge-fields"><div><label for="edgeNodeType">図形の種類</label><select id="edgeNodeType"><option value="process">処理（四角）</option><option value="decision">判断（ひし形）</option><option value="terminal">開始・終了（丸角）</option></select></div><div><label for="edgeNodeLabel">図形に表示する文字</label><input id="edgeNodeLabel" maxlength="80" placeholder="例：追加の確認" autocomplete="off"></div></div>
+    <p id="edgeLaneHint"></p><p>前後を自動でつなぎます。線の文字は挿入した図形の手前に残ります。</p>
+    <div class="form-actions"><button class="btn primary" type="submit" data-icon="filePlus">図形を挿入</button></div>
+  </form>
+  <p id="edgeError" class="form-error" role="alert" hidden></p>
+  <div class="form-actions"><button class="btn danger" id="deleteEdgeBtn" data-icon="trash" type="button">この線を削除</button></div>
+</dialog>
+<dialog class="edge-dialog" id="textDialog" aria-labelledby="textDialogTitle">
+  <div class="dialog-heading"><h2 id="textDialogTitle">文字を編集</h2><button type="button" id="closeTextDialog" data-icon="close" aria-label="文字の編集を閉じる"></button></div>
+  <form id="textEditForm">
+    <label for="textTarget">編集する図形・担当レーン</label><select id="textTarget"></select>
+    <div class="edge-section"><label for="displayText">表示する文字</label><input id="displayText" maxlength="120" autocomplete="off" required><p>接続を保ったまま、図に表示する名前を変更します。</p></div>
+    <p id="textError" class="form-error" role="alert" hidden></p>
+    <div class="form-actions"><button class="btn primary" type="submit" data-icon="check">文字を反映</button></div>
+  </form>
+</dialog>
 <script>
+const icons={
+  link:'<path d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m0 2 1-1a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0"/>',
+  undo:'<path d="M4 8h9a7 7 0 0 1 0 14M4 8l5-5M4 8l5 5"/>',
+  redo:'<path d="M20 8h-9a7 7 0 0 0 0 14m9-14-5-5m5 5-5 5"/>',
+  trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
+  workflow:'<rect x="3" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="15" width="7" height="6" rx="1.5"/><path d="M6.5 9v9H14m-3-3 3 3-3 3"/>',
+  filePlus:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 11v7m-3-3.5h6"/>',
+  folder:'<path d="M3 8V5a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v2M3 8h16a2 2 0 0 1 2 2l-2 9H3L1 10a2 2 0 0 1 2-2z"/>',
+  save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12l4 4v12a2 2 0 0 1-2 2z"/><path d="M7 3v6h9V3M7 21v-8h10v8M13 5v2"/>',
+  copy:'<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3"/>',
+  image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+  download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
+  help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4.2 1.8c-1 .6-1.7 1.1-1.7 2.7M12 17h.01"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
+  lanes:'<rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M2 9h20M2 15h20"/>',
+  terminal:'<rect x="2" y="6" width="20" height="12" rx="6"/>',
+  process:'<rect x="3" y="5" width="18" height="14" rx="2"/>',
+  decision:'<path d="m12 2 10 10-10 10L2 12z"/>',
+  arrow:'<path d="M3 12h18m-6-6 6 6-6 6"/>',
+  zoomIn:'<circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6M7 10h6m-3-3v6"/>',
+  zoomOut:'<circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6M7 10h6"/>',
+  fit:'<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><rect x="7" y="7" width="10" height="10" rx="1"/>',
+  close:'<path d="m6 6 12 12M6 18 18 6"/>',
+  text:'<path d="M4 5V3h16v2M12 3v18m-4 0h8"/>',
+  editLine:'<path d="M3 18h7m7 0h4m-3-3 3 3-3 3M6 10l9-9 4 4-9 9-5 1z"/>',
+  check:'<path d="m5 12 4 4L19 6"/>'
+};
+function icon(name){return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${icons[name]||''}</svg>`}
+document.querySelectorAll('[data-icon]').forEach(el=>el.insertAdjacentHTML('afterbegin',icon(el.dataset.icon)));
+document.querySelectorAll('[data-example]').forEach(el=>el.insertAdjacentHTML('afterbegin',icon('arrow')));
 const examples={
   swimlane:'営業:\n問い合わせ受付 → 内容確認 → 見積作成\n\n責任者:\n見積作成 → 見積承認\n\n営業:\n見積承認 → 受注 → 納品完了',
   basic:'受付 → 内容確認 → 見積作成 → 対応完了',
@@ -107,87 +322,704 @@ const examples={
   shapes:'開始((問い合わせ受付)) → 確認[内容を確認]\n確認 → 判断{対応可能？}\n判断 -- はい → 完了((納品完了))'
 };
 const initial=examples.swimlane;
-const $=s=>document.querySelector(s),source=$('#source'),svg=$('#diagram');
+const $=s=>document.querySelector(s),source=$('#source'),svg=$('#diagram'),canvas=$('.canvas');
 const themes={blue:{process:'#668be0',terminal:'#4fa47e',decision:'#dca63a',lane1:'#ffffff',lane2:'#f7f9fc',head1:'#f3f6fb',head2:'#eef2f8'},green:{process:'#4b9b81',terminal:'#2f8b67',decision:'#cf9630',lane1:'#fbfefc',lane2:'#f2f9f5',head1:'#e9f5ef',head2:'#e2f0e9'},mono:{process:'#657083',terminal:'#465365',decision:'#657083',lane1:'#ffffff',lane2:'#f5f5f5',head1:'#eeeeee',head2:'#e6e6e6'}};
-let zoom=1;
-function storageGet(key,fallback){try{return localStorage.getItem(key)||fallback}catch{return fallback}}
-function storageSet(key,value){try{localStorage.setItem(key,value)}catch{/* プライベートブラウズなど保存不可の環境でも作成は続ける */}}
+let zoom=1,fitToView=true,lastGraph=null,editingEdge=null,editingSource='';
+let selectedNodeId=null,connectingFrom=null,dragState=null,ignoreClickUntil=0,currentDocument='',lastTypingAt=0,lastChangeTyping=false;
+const undoStack=[],redoStack=[];
+function storageGet(key,fallback){try{return localStorage.getItem(key)??fallback}catch{return fallback}}
+function storageSet(key,value){try{localStorage.setItem(key,value);return true}catch{return false}}
+function saveDraft(){
+  const results=[storageSet('simple-flow-source',source.value),storageSet('simple-flow-name',$('#flowName').value),storageSet('simple-flow-theme',$('#theme').value)];
+  const images=readSettings(source.value).media.filter(card=>card.type==='image'),pending=images.some(card=>!assetCache.has(card.assetId)&&!missingAssets.has(card.assetId)),saved=results.every(Boolean)&&!images.some(card=>unsavedAssets.has(card.assetId)||missingAssets.has(card.assetId)),status=$('#saved');
+  status.textContent=pending?'画像を読み込み中':saved?'自動保存済み':'ボード保存が必要です';status.classList.toggle('error',!saved);
+  status.title=saved?'このブラウザに保存しました':'画像が見つからないか、ブラウザに保存できません。画像を含むボードファイルで保存・読み込みしてください。';
+}
 source.value=storageGet('simple-flow-source',initial);
+currentDocument=source.value;
 $('#flowName').value=storageGet('simple-flow-name','受注業務フロー');
+source.setSelectionRange(source.value.length,source.value.length);
+
+function updateHistoryButtons(){$('#undoBtn').disabled=!undoStack.length;$('#redoBtn').disabled=!redoStack.length}
+function commitDocument(next,options={}){
+  if(next===currentDocument){if(Object.hasOwn(options,'selection')){selectedNodeId=options.selection;selectedMediaId=null}if(Object.hasOwn(options,'mediaSelection'))selectedMediaId=options.mediaSelection;syncSelection();return false}
+  const now=Date.now();if(!(options.typing&&lastChangeTyping&&now-lastTypingAt<700)){undoStack.push({text:currentDocument,selection:selectedNodeId,mediaSelection:selectedMediaId});if(undoStack.length>80)undoStack.shift()}
+  redoStack.length=0;lastTypingAt=now;lastChangeTyping=!!options.typing;currentDocument=next;if(source.value!==next)source.value=next;
+  if(Object.hasOwn(options,'selection')){selectedNodeId=options.selection;selectedMediaId=null}if(Object.hasOwn(options,'mediaSelection'))selectedMediaId=options.mediaSelection;
+  render();saveDraft();updateHistoryButtons();return true;
+}
+function restoreHistory(from,to){
+  if(!from.length)return;cancelConnection();to.push({text:currentDocument,selection:selectedNodeId,mediaSelection:selectedMediaId});const item=from.pop();currentDocument=item.text;source.value=item.text;selectedNodeId=item.selection;selectedMediaId=item.mediaSelection||null;activeEmbedId=null;lastChangeTyping=false;render();saveDraft();updateHistoryButtons();
+}
+function insertText(text,start,end,offset=text.length,length=0){
+  const next=source.value.slice(0,start)+text+source.value.slice(end);commitDocument(next);
+  if(document.body.classList.contains('text-mode'))source.focus();source.setSelectionRange(start+offset,start+offset+length);
+}
+function insertPart(kind){
+  let start=source.selectionStart,end=source.selectionEnd;
+  const graph=parse(source.value);
+  // When a previous insertion still has its label selected, add after that
+  // complete node rather than nesting new syntax inside its label.
+  for(const token of graph.tokens){
+    if(start>token.start&&start<token.end&&end<=token.end){start=end=token.end;break}
+  }
+  if(kind==='arrow'){insertText(' → ',start,end);return}
+  if(kind==='lane'){
+    let number=1;while(graph.lanes.includes('担当'+number))number++;
+    const label='担当'+number,lineEnd=source.value.indexOf('\n',end),position=lineEnd<0?source.value.length:lineEnd;
+    const prefix=position?'\n\n':'';
+    insertText(prefix+label+':\n',position,position,prefix.length,label.length);
+    toast('担当者・部署の名前を入力してください');return;
+  }
+  const shapes={process:{prefix:'処理',label:'処理内容',open:'[',close:']'},decision:{prefix:'判断',label:'条件は？',open:'{',close:'}'},terminal:{prefix:'開始',label:'開始・終了',open:'((',close:'))'}};
+  const shape=shapes[kind];if(!shape)return;
+  const lineStart=source.value.lastIndexOf('\n',start-1)+1,lineEnd=source.value.indexOf('\n',end),lineStop=lineEnd<0?source.value.length:lineEnd;
+  if(/^[^→\n]+[：:]\s*$/.test(source.value.slice(lineStart,lineStop))){start=end=lineStop}
+  let number=1;while(graph.nodes.some(node=>node.id===shape.prefix+number))number++;
+  const id=shape.prefix+number,node=id+shape.open+shape.label+shape.close;
+  const before=source.value.slice(0,start).split('\n').pop().trim(),after=source.value.slice(end).split('\n')[0].trim();
+  const prefix=!before?'':/[：:]$/.test(before)?'\n':/(?:→|->|-->)$/.test(before)?' ':' → ';
+  const suffix=!after?'':/^[^→]*[：:]$/.test(after)?'\n':/^(?:→|->|-->)/.test(after)?' ':' → ';
+  insertText(prefix+node+suffix,start,end,prefix.length+id.length+shape.open.length,shape.label.length);
+  toast('選択された名前を書き換えられます');
+}
+document.querySelectorAll('[data-insert]').forEach(button=>button.addEventListener('click',()=>insertPart(button.dataset.insert)));
 
 function escapeHtml(value=''){const el=document.createElement('div');el.textContent=value;return el.innerHTML}
+function escapeAttr(value=''){return escapeHtml(value).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function svgText(label,x,y,maxChars=12){const chars=[...label],lines=[];for(let i=0;i<chars.length;i+=maxChars)lines.push(chars.slice(i,i+maxChars).join(''));const start=y-(lines.length-1)*8;return`<text x="${x}" y="${start}" text-anchor="middle" font-size="13" font-weight="700" fill="#26344a">${lines.map((line,index)=>`<tspan x="${x}" dy="${index?16:0}">${escapeHtml(line)}</tspan>`).join('')}</text>`}
+// BEGIN FLOW MODEL
+function safeMediaUrl(value){
+  if(typeof value!=='string'||value.length>4096)return null;
+  try{const url=new URL(value.trim());return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password?url.href:null}catch{return null}
+}
+function normalizeMedia(items){
+  const ids=new Set(),number=(v,f,min,max)=>Number.isFinite(v)?Math.max(min,Math.min(max,v)):f;
+  return (Array.isArray(items)?items:[]).slice(0,100).flatMap(item=>{
+    if(!item||!/^media-[a-zA-Z0-9-]{1,80}$/.test(item.id)||ids.has(item.id)||!['image','embed'].includes(item.type))return [];
+    const url=item.type==='embed'?safeMediaUrl(item.url):null;
+    if(item.type==='embed'&&!url||item.type==='image'&&!/^asset-[a-zA-Z0-9-]{1,80}$/.test(item.assetId))return [];
+    ids.add(item.id);return [{id:item.id,type:item.type,title:typeof item.title==='string'?item.title.slice(0,100):item.type==='image'?'画像':'リンク',...(url?{url}:{assetId:item.assetId}),x:number(item.x,200,12,12000),y:number(item.y,100,12,12000),width:number(item.width,360,120,2000),height:number(item.height,260,90,1800),aspect:item.aspect!==false,border:['gray','blue','green','purple'].includes(item.border)?item.border:'gray'}];
+  });
+}
+function setMediaCards(text,items){const settings=readSettings(text);settings.media=normalizeMedia(items);return writeSettings(text,settings)}
+function changeMedia(text,id,changes){const settings=readSettings(text);return setMediaCards(text,settings.media.map(item=>item.id===id?{...item,...changes,id:item.id,type:item.type}:item))}
+function resizeMedia(card,width,height,ratio=null){
+  width=Math.max(120,Math.min(2000,width));height=Math.max(90,Math.min(1800,height));
+  if(ratio&&Number.isFinite(ratio)&&ratio>0){
+    const content=Math.max(66,Math.min(1776,(width-24)/ratio));width=content*ratio+24;height=content+52;
+    if(width>2000){width=2000;height=(width-24)/ratio+52}
+    if(height>1800){height=1800;width=(height-52)*ratio+24}
+  }
+  return {...card,width:Math.round(width),height:Math.round(height)};
+}
+function validateBoard(value){
+  if(!value||value.format!=='simple-flow-board'||value.version!==1||typeof value.source!=='string'||value.source.length>2000000||!Array.isArray(value.assets)||value.assets.length>100)throw new Error('対応するボードファイルではありません');
+  const assets=new Map();let total=0;
+  for(const asset of value.assets){
+    if(!asset||!/^asset-[a-zA-Z0-9-]{1,80}$/.test(asset.id)||assets.has(asset.id)||typeof asset.dataUrl!=='string'||!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(asset.dataUrl))throw new Error('画像データが正しくありません');
+    total+=asset.dataUrl.length;if(total>64000000)throw new Error('画像データが大きすぎます');assets.set(asset.id,asset);
+  }
+  for(const card of readSettings(value.source).media)if(card.type==='image'&&!assets.has(card.assetId))throw new Error('ボードに必要な画像が含まれていません');
+  return {source:value.source,name:typeof value.name==='string'?value.name.slice(0,120):'業務フロー',theme:['blue','green','mono'].includes(value.theme)?value.theme:'blue',assets:[...assets.values()]};
+}
+
+const settingsPrefix='# @flow ';
+function readSettings(text){
+  let data={};
+  for(const line of text.split('\n')){if(line.trim().startsWith(settingsPrefix)){try{const value=JSON.parse(line.trim().slice(settingsPrefix.length));if(value&&typeof value==='object')data=value}catch{}}}
+  const nodes=Array.isArray(data.nodes)?data.nodes.filter(n=>n&&typeof n.id==='string').map(n=>{
+    const positions={};for(const direction of ['horizontal','vertical']){const p=n.positions?.[direction];if(p&&Number.isFinite(p.flow)&&Number.isFinite(p.cross))positions[direction]={flow:Math.max(20,Math.min(12000,p.flow)),cross:Math.max(20,Math.min(12000,p.cross))}}
+    return {id:n.id,lane:typeof n.lane==='string'?n.lane:undefined,color:['blue','green','orange','purple','pink'].includes(n.color)?n.color:'auto',positions};
+  }):[];
+  return {orientation:data.orientation==='vertical'?'vertical':'horizontal',longLinks:data.longLinks==='auto'?'auto':'line',media:normalizeMedia(data.media),connections:Array.isArray(data.connections)?data.connections.filter(e=>e&&typeof e.from==='string'&&typeof e.to==='string'&&typeof e.label==='string'&&['line','jump'].includes(e.mode)):[],nodes};
+}
+function writeSettings(text,settings){
+  const newline=text.includes('\r\n')?'\r\n':'\n';
+  const lines=text.split('\n').filter(line=>!line.trim().startsWith(settingsPrefix));
+  return settingsPrefix+JSON.stringify(settings)+newline+lines.join('\n');
+}
+function sameConnection(a,b){return a.from===b.from&&a.to===b.to&&a.label===b.label}
+function connectionMode(settings,edge){return settings.connections.find(item=>sameConnection(item,edge))?.mode||'default'}
+function setConnectionMode(text,edge,mode){
+  const settings=readSettings(text);settings.connections=settings.connections.filter(item=>!sameConnection(item,edge));
+  if(mode!=='default')settings.connections.push({from:edge.from,to:edge.to,label:edge.label,mode});
+  if(mode==='default'&&!text.split('\n').some(line=>line.trim().startsWith(settingsPrefix)))return text;
+  return writeSettings(text,settings);
+}
+function referenceNumber(number){return number<=20?String.fromCodePoint(0x2460+number-1):'('+number+')'}
+function decodeText(value){
+  const text=value.trim();
+  if(text.startsWith('"')){try{const decoded=JSON.parse(text);if(typeof decoded==='string')return decoded}catch{}}
+  return text;
+}
 function readNode(raw){
   raw=raw.trim(); let id=raw,label=raw,type='process',match,explicit=false;
   if((match=raw.match(/^(.+?)\(\((.+)\)\)$/))){id=match[1];label=match[2];type='terminal';explicit=true}
   else if((match=raw.match(/^(.+?)\{(.+)\}$/))){id=match[1];label=match[2];type='decision';explicit=true}
   else if((match=raw.match(/^(.+?)\[(.+)\]$/))){id=match[1];label=match[2];explicit=true}
   else { label=raw; if(/開始|受付$/.test(raw))type='terminal'; if(/完了|終了$/.test(raw))type='terminal'; if(/[?？]$/.test(raw))type='decision'; }
-  return{id:id.trim(),label:label.trim(),type,explicit};
+  return{id:id.trim(),label:explicit?decodeText(label):label.trim(),type,explicit};
+}
+// Keep original offsets so visual edits only replace the selected connection.
+// Arrows and brackets inside quoted labels are ordinary text.
+function flowParts(line){
+  const parts=[];let start=0,branch=-1,quote=false,escaped=false;const stack=[];
+  function append(end,arrowStart=null,arrowEnd=null){
+    const raw=line.slice(start,end),left=raw.length-raw.trimStart().length,right=start+raw.trimEnd().length;
+    const nodeLimit=branch>=0?branch:end,nodeRaw=line.slice(start,nodeLimit),nodeText=nodeRaw.trim();
+    if(nodeText)parts.push({raw:nodeText,start:start+left,nodeEnd:start+nodeRaw.trimEnd().length,end:right,branch,label:branch>=0?decodeText(line.slice(branch+2,end)):'',arrowStart,arrowEnd});
+  }
+  for(let i=0;i<line.length;i++){
+    const char=line[i];
+    if(quote){if(escaped)escaped=false;else if(char==='\\')escaped=true;else if(char==='"')quote=false;continue}
+    if(char==='"'){quote=true;continue}
+    if('([{'.includes(char)){stack.push(char);continue}
+    if(')]}'.includes(char)&&stack.length){const pair={')':'(',']':'[','}':'{'};if(stack.at(-1)===pair[char])stack.pop();continue}
+    if(stack.length)continue;
+    const arrow=line.startsWith('-->',i)?3:line.startsWith('->',i)?2:char==='→'?1:0;
+    if(arrow){append(i,i,i+arrow);i+=arrow-1;start=i+1;branch=-1;continue}
+    if(branch<0&&line.startsWith('--',i)){branch=i;i++}
+  }
+  append(line.length);return parts;
 }
 function parse(text){
-  const nodes=new Map(),edges=[],lanes=[];let currentLane='共通';
+  const nodes=new Map(),edges=[],edgeMap=new Map(),lanes=[],tokens=[],laneTokens=[];let currentLane='共通',offset=0,hasHeader=false,implicitLane=false;
   const ensureLane=lane=>{if(!lanes.includes(lane))lanes.push(lane)};
   const addNode=node=>{const current=nodes.get(node.id);if(!current||node.explicit)nodes.set(node.id,{...node,lane:current?.lane||currentLane});return nodes.get(node.id)};
-  text.split(/\n/).map(x=>x.trim()).filter(x=>x&&!x.startsWith('#')).forEach(line=>{
+  text.split('\n').forEach(rawLine=>{
+    const line=rawLine.trim(),lineOffset=offset;offset+=rawLine.length+1;
+    if(!line||line.startsWith('#'))return;
     const laneHeader=line.match(/^(.+?)[：:]$/);
-    if(laneHeader&&!/[→>-]/.test(line)){currentLane=laneHeader[1].trim()||'共通';ensureLane(currentLane);return}
+    if(laneHeader&&(!/[→>-]/.test(line)||laneHeader[1].startsWith('"'))){currentLane=decodeText(laneHeader[1])||'共通';ensureLane(currentLane);hasHeader=true;const start=lineOffset+rawLine.indexOf(line);laneTokens.push({lane:currentLane,start,end:start+line.length-1});return}
     ensureLane(currentLane);
-    const normalized=line.replace(/-->/g,'→').replace(/->/g,'→');
-    const parts=normalized.split(/\s*→\s*/).filter(Boolean);
-    if(!parts.length)return;
-    let previous=readNode(parts[0]),branchLabel='';
-    const branch=parts[0].match(/^(.*?)\s*--\s*(.+?)\s*$/);
-    if(branch){previous=readNode(branch[1]);branchLabel=branch[2]}
-    previous=addNode(previous);
+    if(!hasHeader)implicitLane=true;
+    const parts=flowParts(rawLine);
+    const partNodes=parts.map(part=>{const node=readNode(part.raw);tokens.push({id:node.id,start:lineOffset+part.start,end:lineOffset+part.nodeEnd});return addNode(node)});
     for(let i=1;i<parts.length;i++){
-      const current=addNode(readNode(parts[i])),label=i===1?branchLabel:'';
-      const duplicate=edges.find(e=>e.from===previous.id&&e.to===current.id);
-      if(!duplicate)edges.push({from:previous.id,to:current.id,label});else if(label&&!duplicate.label)duplicate.label=label;
-      previous=current;
+      const fromPart=parts[i-1],toPart=parts[i];if(fromPart.arrowStart===null)continue;
+      const previous=partNodes[i-1],current=partNodes[i],label=fromPart.label,key=JSON.stringify([previous.id,current.id,label]);
+      const occurrence={labelStart:lineOffset+fromPart.nodeEnd,labelEnd:lineOffset+fromPart.arrowStart,connectorEnd:lineOffset+toPart.start,lane:currentLane};
+      const duplicate=edgeMap.get(key);
+      if(!duplicate){const edge={from:previous.id,to:current.id,label,occurrences:[occurrence]};edges.push(edge);edgeMap.set(key,edge)}
+      else {duplicate.occurrences.push(occurrence);if(label&&!duplicate.label)duplicate.label=label}
     }
   });
-  return{nodes:[...nodes.values()],edges,lanes:lanes.length?lanes:['共通']};
+  const settings=readSettings(text);
+  for(const preference of settings.nodes){const node=nodes.get(preference.id);if(node){if(preference.lane){node.lane=preference.lane;ensureLane(node.lane)}node.color=preference.color}}
+  return{nodes:[...nodes.values()],edges,lanes:lanes.length?lanes:['共通'],tokens,laneTokens,implicitLane,settings};
+}
+function replaceRanges(text,edits){
+  return [...edits].sort((a,b)=>b.start-a.start).reduce((value,edit)=>value.slice(0,edit.start)+edit.text+value.slice(edit.end),text);
+}
+function editEdgeLabel(text,edge,label){
+  let next=replaceRanges(text,edge.occurrences.map(part=>({start:part.labelStart,end:part.labelEnd,text:label?' -- '+JSON.stringify(label)+' ':' '})));
+  const settings=readSettings(text),configured=settings.connections.find(item=>sameConnection(item,edge));
+  if(configured){configured.label=label;next=writeSettings(next,settings)}
+  return next;
+}
+function editNodeText(text,graph,id,label){
+  if(!label.trim())throw new Error('表示する文字を入力してください');
+  const node=graph.nodes.find(item=>item.id===id),shapes={process:['[',']'],decision:['{','}'],terminal:['((','))']},shape=shapes[node.type];
+  return replaceRanges(text,graph.tokens.filter(token=>token.id===id).map(token=>({...token,text:id+shape[0]+JSON.stringify(label.trim())+shape[1]})));
+}
+function editLaneText(text,graph,lane,label){
+  label=label.trim();if(!label)throw new Error('担当レーンの名前を入力してください');
+  if(label!==lane&&graph.lanes.includes(label))throw new Error('同じ名前の担当レーンがあります。別の名前にしてください');
+  if(label===lane)return text;
+  let next=replaceRanges(text,graph.laneTokens.filter(token=>token.lane===lane).map(token=>({...token,text:JSON.stringify(label)})));
+  if(lane==='共通'&&graph.implicitLane)next=JSON.stringify(label)+':'+(text.includes('\r\n')?'\r\n':'\n')+next;
+  const settings=readSettings(text);if(settings.nodes.some(n=>n.lane===lane)){settings.nodes.forEach(n=>{if(n.lane===lane)n.lane=label});next=writeSettings(next,settings)}
+  return next;
+}
+function nodeDefinition(id,type,label){const shape={process:['[',']'],decision:['{','}'],terminal:['((','))']}[type];if(!shape)throw new Error('図形の種類を選択してください');return id+shape[0]+JSON.stringify(label)+shape[1]}
+function nodePreference(settings,id){let item=settings.nodes.find(n=>n.id===id);if(!item){item={id,color:'auto',positions:{}};settings.nodes.push(item)}return item}
+function updateNode(text,graph,id,{label,type,lane,color}){
+  label=label.trim();if(!label)throw new Error('図形の名前を入力してください');
+  if(!graph.lanes.includes(lane))throw new Error('担当レーンを選択してください');
+  const next=replaceRanges(text,graph.tokens.filter(t=>t.id===id).map(t=>({...t,text:nodeDefinition(id,type,label)}))),settings=readSettings(text),preference=nodePreference(settings,id);
+  preference.lane=lane;preference.color=color;return writeSettings(next,settings);
+}
+function appendFlow(text,lane,line){const nl=text.includes('\r\n')?'\r\n':'\n';return text+(text&&!text.endsWith('\n')?nl:'')+JSON.stringify(lane)+':'+nl+line+nl}
+function addVisualNode(text,graph,{type='process',label='新しい処理',lane=graph.lanes[0],color='auto',position}){
+  let number=1;while(graph.nodes.some(n=>n.id==='図形'+number))number++;const id='図形'+number;
+  let next=appendFlow(text,lane,nodeDefinition(id,type,label));
+  if(position||color!=='auto'){const settings=readSettings(next),preference=nodePreference(settings,id);preference.color=color;if(position)preference.positions[settings.orientation]=position;next=writeSettings(next,settings)}
+  return {text:next,id};
+}
+function connectNodes(text,graph,from,to,label=''){
+  if(!graph.nodes.some(n=>n.id===from)||!graph.nodes.some(n=>n.id===to))throw new Error('接続する図形を選択してください');
+  if(from===to)throw new Error('別の図形を選んでください');
+  if(graph.edges.some(e=>e.from===from&&e.to===to&&e.label===label))return text;
+  return appendFlow(text,graph.nodes.find(n=>n.id===from).lane,from+(label?' -- '+JSON.stringify(label):'')+' → '+to);
+}
+function removeFromFlow(text,removeId=null,removeEdge=null){
+  const graph=parse(text),lineStarts=new Set(graph.tokens.map(t=>text.lastIndexOf('\n',t.start-1)+1));let offset=0;
+  const next=text.split('\n').map(raw=>{
+    const start=offset;offset+=raw.length+1;if(!lineStarts.has(start))return raw;
+    const parts=flowParts(raw),ids=parts.map(p=>readNode(p.raw).id),cuts=new Set();
+    for(let i=0;i<parts.length-1;i++)if(removeEdge&&sameConnection({from:ids[i],to:ids[i+1],label:parts[i].label},removeEdge))cuts.add(i);
+    if(!ids.includes(removeId)&&!cuts.size)return raw;
+    const runs=[];let run=[];const finish=()=>{if(run.length)runs.push(run);run=[]};
+    parts.forEach((part,i)=>{if(ids[i]===removeId){finish();return}run.push(i);if(cuts.has(i))finish()});finish();
+    const indent=raw.match(/^\s*/)[0],nl=raw.endsWith('\r')?'\r\n':'\n';
+    return runs.map(indices=>indent+indices.map((index,i)=>parts[index].raw+(i<indices.length-1?(parts[index].label?' -- '+JSON.stringify(parts[index].label):'')+' → ':'')).join('')).join(nl)+(raw.endsWith('\r')?'\r':'');
+  }).join('\n');
+  const settings=readSettings(next);settings.nodes=settings.nodes.filter(n=>n.id!==removeId);settings.connections=settings.connections.filter(e=>removeId?e.from!==removeId&&e.to!==removeId:!sameConnection(e,removeEdge));
+  return writeSettings(next,settings);
+}
+function moveVisualNode(text,graph,id,x,y,snap=true){
+  const node=graph.nodes.find(n=>n.id===id);if(!node)return text;
+  const center=graph.vertical?x+node.width/2:y+node.height/2;
+  const band=graph.laneBands.find(b=>center>=b.start&&center<b.start+b.size)||graph.laneBands.at(-1);
+  const grid=v=>snap?Math.round(v/10)*10:Math.round(v),settings=readSettings(text),preference=nodePreference(settings,id);
+  preference.lane=band.lane;preference.positions[settings.orientation]={flow:Math.max(graph.vertical?90:170,grid(graph.vertical?y:x)),cross:Math.max(20,grid((graph.vertical?x:y)-band.start))};
+  return writeSettings(text,settings);
+}
+function resetPositions(text){const settings=readSettings(text);for(const n of settings.nodes)delete n.positions[settings.orientation];return writeSettings(text,settings)}
+function insertEdgeNode(text,graph,edge,kind,label){
+  const shapes={process:['工程','処理','[',']'],decision:['判断','判断','{','}'],terminal:['開始終了','開始・終了','((','))']};
+  const shape=shapes[kind];if(!shape)throw new Error('図形の種類を選択してください');
+  let number=1;while(graph.nodes.some(node=>node.id===shape[0]+number))number++;
+  const id=shape[0]+number,node=id+shape[2]+JSON.stringify(label||shape[1])+shape[3];
+  const connector=(edge.label?' -- '+JSON.stringify(edge.label):'')+' → '+node+' → ';
+  let next=replaceRanges(text,edge.occurrences.map(part=>({start:part.labelStart,end:part.connectorEnd,text:connector})));
+  const settings=readSettings(text),original=graph.edges.find(item=>item.occurrences===edge.occurrences),configured=settings.connections.find(item=>sameConnection(item,original||edge));
+  if(configured){configured.from=id;configured.label='';next=writeSettings(next,settings)}
+  return {text:next,id,lane:edge.occurrences[0].lane};
+}
+function edgeLabelMetrics(label){
+  const chars=[...label],lines=[];for(let i=0;i<chars.length;i+=12)lines.push(chars.slice(i,i+12).join(''));
+  return {lines,width:Math.max(36,Math.max(0,...lines.map(line=>[...line].length))*12+18),height:lines.length*15+10};
 }
 function layout(graph){
-  const incoming=new Map(graph.nodes.map(n=>[n.id,0]));graph.edges.forEach(e=>incoming.set(e.to,(incoming.get(e.to)||0)+1));
-  const levels=new Map(),queue=graph.nodes.filter(n=>!incoming.get(n.id)).map(n=>n.id);if(!queue.length&&graph.nodes.length)queue.push(graph.nodes[0].id);
-  queue.forEach(id=>levels.set(id,0));let guard=0;
-  while(queue.length&&guard++<500){const id=queue.shift(),level=levels.get(id)||0;graph.edges.filter(e=>e.from===id).forEach(e=>{if(!levels.has(e.to)){levels.set(e.to,level+1);queue.push(e.to)}})}
-  graph.nodes.forEach(n=>{if(!levels.has(n.id))levels.set(n.id,0)});
+  const incoming=new Map(graph.nodes.map(n=>[n.id,0])),outgoing=new Map(graph.nodes.map(n=>[n.id,[]]));
+  graph.edges.forEach(e=>{incoming.set(e.to,incoming.get(e.to)+1);outgoing.get(e.from).push(e.to)});
+  const levels=new Map(),settled=new Set(),queue=graph.nodes.filter(n=>!incoming.get(n.id)).map(n=>n.id);
+  queue.forEach(id=>levels.set(id,0));
+  for(let index=0;index<queue.length;index++){
+    const id=queue[index];settled.add(id);
+    for(const to of outgoing.get(id)){levels.set(to,Math.max(levels.get(to)||0,levels.get(id)+1));incoming.set(to,incoming.get(to)-1);if(!incoming.get(to))queue.push(to)}
+  }
+  // Cyclic flows still get a finite layout; backwards edges remain valid.
+  for(const node of graph.nodes){
+    if(settled.has(node.id))continue;
+    const remaining=[node.id];if(!levels.has(node.id))levels.set(node.id,0);
+    for(let index=0;index<remaining.length;index++){
+      const id=remaining[index];if(settled.has(id))continue;settled.add(id);
+      for(const to of outgoing.get(id)){if(!settled.has(to)){levels.set(to,Math.max(levels.get(to)||0,levels.get(id)+1));remaining.push(to)}}
+    }
+  }
+  const vertical=graph.settings.orientation==='vertical',byId=new Map(graph.nodes.map(n=>[n.id,n]));
+  graph.nodes.forEach((n,index)=>{n.width=n.type==='decision'?160:166;n.height=n.type==='decision'?Math.max(90,Math.ceil([...n.label].length/9)*28+30):Math.max(62,Math.ceil([...n.label].length/12)*16+24);n.number=index+1});
+  const nodeWidth=Math.max(166,...graph.nodes.map(n=>n.width)),nodeHeight=Math.max(90,...graph.nodes.map(n=>n.height));
+  const fan=Math.max(1,...graph.nodes.map(n=>Math.max(graph.edges.filter(e=>e.from===n.id).length,graph.edges.filter(e=>e.to===n.id).length)));
+  const gapFan=Math.max(1,...[...levels.values()].map(level=>graph.edges.filter(e=>levels.get(e.from)===level||levels.get(e.to)===level).length));
+  const jumpFan=Math.max(0,...graph.nodes.map(n=>graph.edges.filter(e=>e.from===n.id&&shouldShorten(graph,e,levels,byId)).length));
+  const labelWidth=Math.max(80,...graph.edges.map(e=>edgeLabelMetrics(e.label).width)),labelHeight=Math.max(25,...graph.edges.map(e=>edgeLabelMetrics(e.label).height));
+  const flowStep=vertical?Math.max(240,nodeHeight+jumpFan*(labelHeight+46)+45,nodeHeight+60+gapFan*24):Math.max(320,nodeWidth+labelWidth+110,nodeWidth+60+gapFan*24),flowOrigin=(vertical?Math.max(140,94+nodeHeight/2):260)+gapFan*12;
+  const crossCell=vertical?Math.max(240,nodeWidth+40+fan*16,fan*(labelWidth+36)+60,jumpFan?nodeWidth+2*(labelWidth+60):0):Math.max(nodeHeight+60,60+fan*(labelHeight+44),nodeHeight+60+2*jumpFan*(labelHeight+46));
   const laneSlots=new Map();
-  graph.nodes.forEach(n=>{const level=levels.get(n.id),slotKey=`${n.lane}:${level}`,slot=laneSlots.get(slotKey)||0;laneSlots.set(slotKey,slot+1);n.x=190+Number(level)*230;n.slot=slot});
-  const laneHeights=new Map(graph.lanes.map(lane=>[lane,Math.max(145,100+Math.max(0,...[...laneSlots].filter(([key])=>key.startsWith(lane+':')).map(([,count])=>count-1))*90)]));
-  let laneTop=0;graph.lanes.forEach(lane=>{graph.nodes.filter(n=>n.lane===lane).forEach(n=>n.y=laneTop+42+n.slot*90);laneTop+=laneHeights.get(lane)});
-  // 配置済みのノードと接続線も返す。寸法だけを返すと、描画処理で
-  // graph.nodes が undefined になりプレビュー全体が停止してしまう。
-  return{...graph,levels,laneHeights,width:Math.max(760,260+(Math.max(0,...levels.values())+1)*230),height:Math.max(360,laneTop)};
+  graph.nodes.forEach(n=>{const level=levels.get(n.id),key=JSON.stringify([n.lane,level]);n.slot=laneSlots.get(key)||0;laneSlots.set(key,n.slot+1)});
+  const laneBands=[];let crossStart=0;
+  const positions=new Map(graph.settings.nodes.map(n=>[n.id,n.positions[graph.settings.orientation]]));
+  for(const lane of graph.lanes){
+    const count=Math.max(1,...graph.nodes.filter(n=>n.lane===lane).map(n=>n.slot+1));
+    const detours=graph.edges.filter(e=>byId.get(e.from).lane===lane&&levels.get(e.to)-levels.get(e.from)!==1);
+    const contentCross=Math.max(count*crossCell,...graph.nodes.filter(n=>n.lane===lane&&positions.get(n.id)).map(n=>positions.get(n.id).cross+(vertical?n.width:n.height)+30)),size=contentCross+60+detours.length*16;
+    const band={lane,start:crossStart,size,gutter:crossStart+contentCross+24};laneBands.push(band);
+    graph.nodes.filter(n=>n.lane===lane).forEach(n=>{
+      const flow=flowOrigin+levels.get(n.id)*flowStep,cross=crossStart+crossCell*(n.slot+.5),position=positions.get(n.id);n.x=(vertical?cross:flow)-n.width/2;n.y=(vertical?flow:cross)-n.height/2;n.manual=!!position;
+      if(position){n.x=vertical?crossStart+position.cross:Math.max(170,position.flow);n.y=vertical?Math.max(90,position.flow):crossStart+position.cross}
+    });
+    crossStart+=size;
+  }
+  const flowEnd=flowOrigin+Math.max(0,...levels.values())*flowStep+flowStep-60;
+  const result={...graph,levels,laneBands,vertical,flowStep,width:vertical?Math.max(400,crossStart):Math.max(760,flowEnd),height:vertical?Math.max(360,flowEnd):Math.max(360,crossStart)};
+  result.routes=routeConnections(result);
+  result.width=Math.max(result.width,...result.settings.media.map(card=>card.x+card.width+60),...result.nodes.map(n=>n.x+n.width+80),...result.routes.flatMap(r=>r.points.map(p=>p.x+40)),...result.routes.filter(r=>r.badge).map(r=>r.badge.x+r.badge.width/2+30));
+  result.height=Math.max(result.height,...result.settings.media.map(card=>card.y+card.height+60),...result.nodes.map(n=>n.y+n.height+80),...result.routes.flatMap(r=>r.points.map(p=>p.y+40)),...result.routes.filter(r=>r.badge).map(r=>r.badge.y+r.badge.height/2+30));return result;
 }
-function edgePath(a,b){const aw=a.type==='decision'?112:166,ah=a.type==='decision'?90:62,bw=b.type==='decision'?112:166,bh=b.type==='decision'?90:62;const x1=a.x+aw,y1=a.y+ah/2,x2=b.x,y2=b.y+bh/2,m=(x1+x2)/2;return{d:`M${x1},${y1} H${m} V${y2} H${x2}`,lx:m+5,ly:(y1+y2)/2-7}}
-function render(){
+function shouldShorten(graph,edge,levels,byId){
+  const a=byId.get(edge.from),b=byId.get(edge.to),delta=levels.get(b.id)-levels.get(a.id),mode=connectionMode(graph.settings,edge);
+  const long=delta>=3||delta<=0||Math.abs(graph.lanes.indexOf(a.lane)-graph.lanes.indexOf(b.lane))>=2;
+  return mode==='jump'||(mode==='default'&&graph.settings.longLinks==='auto'&&long);
+}
+function routeConnections(graph){
+  const byId=new Map(graph.nodes.map(n=>[n.id,n])),vertical=graph.vertical;
+  const point=(u,v)=>vertical?{x:v,y:u}:{x:u,y:v};
+  function port(node,end,index,count){
+    const flow=vertical?node.y+node.height/2:node.x+node.width/2,cross=vertical?node.x+node.width/2:node.y+node.height/2;
+    const crossHalf=(vertical?node.width:node.height)/2,flowHalf=(vertical?node.height:node.width)/2;
+    const offset=count===1?0:(index/(count-1)-.5)*Math.min(crossHalf,40);
+    const extent=node.type==='decision'?flowHalf*(1-Math.abs(offset)/crossHalf):flowHalf;
+    return {u:flow+(end?extent:-extent),v:cross+offset};
+  }
+  return graph.edges.map((edge,index)=>{
+    const a=byId.get(edge.from),b=byId.get(edge.to),out=graph.edges.filter(e=>e.from===a.id),into=graph.edges.filter(e=>e.to===b.id),oi=out.indexOf(edge),ii=into.indexOf(edge);
+    const start=port(a,true,oi,out.length),end=port(b,false,ii,into.length),delta=graph.levels.get(b.id)-graph.levels.get(a.id);
+    const jump=shouldShorten(graph,edge,graph.levels,byId);
+    const palette=['#4268b0','#168575','#a56324','#8c59ac','#bf536d','#397d96'],color=palette[index%palette.length],dash=['','7 4','2 4'][Math.floor(index/palette.length)%3];
+    let points,badge=null,labelSegment=null;
+    if(jump){
+      const text=referenceNumber(b.number)+'へ'+(edge.label?' · '+edge.label:''),box=edgeLabelMetrics(text);
+      const shortcuts=out.filter(e=>shouldShorten(graph,e,graph.levels,byId)),ji=shortcuts.indexOf(edge);
+      const center={x:a.x+a.width+30+box.width/2,y:a.y+a.height+30+box.height/2+ji*(box.height+18)};
+      badge={...center,...box,text,target:edge.to};
+      const finish=vertical?{x:center.x,y:center.y-box.height/2}:{x:center.x-box.width/2,y:center.y};
+      points=[point(start.u,start.v),point(start.u+14,start.v),point(start.u+14,vertical?finish.x:finish.y),finish];
+    }else if(a.manual||b.manual){
+      const forward=vertical?b.y>=a.y:b.x>=a.x,s=port(a,forward,oi,out.length),t=port(b,!forward,ii,into.length),distance=Math.abs(t.u-s.u);
+      if(a.id!==b.id&&distance>55){const mid=(s.u+t.u)/2+(oi-ii)*10;points=[point(s.u,s.v),point(mid,s.v),point(mid,t.v),point(t.u,t.v)]}
+      else{const direction=forward?1:-1,u1=s.u+direction*(30+oi*12),u2=t.u-direction*(30+ii*12),cross=Math.max(vertical?a.x+a.width:a.y+a.height,vertical?b.x+b.width:b.y+b.height)+35+index*10;points=[point(s.u,s.v),point(u1,s.v),point(u1,cross),point(u2,cross),point(u2,t.v),point(t.u,t.v)];labelSegment=2}
+    }else if(delta===1){
+      const peers=graph.edges.filter(e=>graph.levels.get(e.from)===graph.levels.get(a.id)&&graph.levels.get(e.to)===graph.levels.get(b.id));
+      const center=(start.u+end.u)/2+(peers.indexOf(edge)-(peers.length-1)/2)*12;
+      const parallel=out.filter(e=>e.to===b.id);
+      if(parallel.length>1){
+        const spacing=vertical?Math.max(...parallel.map(e=>edgeLabelMetrics(e.label).width))+18:Math.max(...parallel.map(e=>edgeLabelMetrics(e.label).height))+16;
+        const track=(start.v+end.v)/2+(parallel.indexOf(edge)-(parallel.length-1)/2)*spacing;
+        const u1=start.u+20+oi*8,u2=end.u-20-ii*8;
+        points=[point(start.u,start.v),point(u1,start.v),point(u1,track),point(u2,track),point(u2,end.v),point(end.u,end.v)];
+        labelSegment=2;
+      }else points=[point(start.u,start.v),point(center,start.v),point(center,end.v),point(end.u,end.v)];
+    }else{
+      const departures=graph.edges.filter(e=>graph.levels.get(e.from)===graph.levels.get(a.id)),arrivals=graph.edges.filter(e=>graph.levels.get(e.to)===graph.levels.get(b.id));
+      const band=graph.laneBands.find(item=>item.lane===a.lane),detours=graph.edges.filter(e=>byId.get(e.from).lane===a.lane&&graph.levels.get(e.to)-graph.levels.get(e.from)!==1);
+      const u1=(vertical?a.y+a.height:a.x+a.width)+24+departures.indexOf(edge)*12,u2=(vertical?b.y:b.x)-24-arrivals.indexOf(edge)*12,v=band.gutter+detours.indexOf(edge)*16;
+      points=[point(start.u,start.v),point(u1,start.v),point(u1,v),point(u2,v),point(u2,end.v),point(end.u,end.v)];
+      labelSegment=2;
+    }
+    const segments=points.slice(1).map((p,i)=>({a:points[i],b:p,length:Math.abs(p.x-points[i].x)+Math.abs(p.y-points[i].y)}));
+    const longest=labelSegment===null?segments.reduce((best,item)=>item.length>best.length?item:best,segments[0]):segments[labelSegment];
+    return {index,jump,badge,color,dash,points,d:points.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' '),lx:(longest.a.x+longest.b.x)/2,ly:(longest.a.y+longest.b.y)/2};
+  });
+}
+// END FLOW MODEL
+function renderEdgeLabel(label,path,color='#dbe3f1'){
+  if(!label)return '';
+  const box=edgeLabelMetrics(label),top=path.ly-box.height/2;
+  return `<rect class="edge-label-bg" x="${path.lx-box.width/2}" y="${top}" width="${box.width}" height="${box.height}" rx="5" fill="#fff" stroke="${color}"/><text text-anchor="middle" font-size="12" fill="#425573">${box.lines.map((line,index)=>`<tspan x="${path.lx}" y="${top+16+index*15}">${escapeHtml(line)}</tspan>`).join('')}</text>`;
+}
+function render(graphOverride=null){
   try{
-    const graph=layout(parse(source.value)),theme=themes[$('#theme').value]||themes.blue;$('#status').textContent=graph.nodes.length?`${graph.lanes.length}レーン・${graph.nodes.length}工程`:' ';$('#status').className='status';$('#empty').style.display=graph.nodes.length?'none':'grid';
-    svg.setAttribute('viewBox',`0 0 ${graph.width} ${graph.height}`);svg.style.width=graph.width+'px';svg.style.height=graph.height+'px';
-    const byId=new Map(graph.nodes.map(n=>[n.id,n]));let laneY=0;
-    const lanes=graph.lanes.map((lane,index)=>{const height=graph.laneHeights.get(lane),markup=`<rect x="0" y="${laneY}" width="${graph.width}" height="${height}" fill="${index%2?theme.lane2:theme.lane1}" stroke="#dbe1ea"/><rect x="0" y="${laneY}" width="150" height="${height}" fill="${index%2?theme.head2:theme.head1}" stroke="#dbe1ea"/>${svgText(lane,75,laneY+height/2+5,8)}`;laneY+=height;return markup}).join('');
-    const edges=graph.edges.map(e=>{const p=edgePath(byId.get(e.from),byId.get(e.to));return`<path d="${p.d}" fill="none" stroke="#8b97aa" stroke-width="2" marker-end="url(#arrow)"/>${e.label?`<text x="${p.lx}" y="${p.ly}" font-size="11" fill="#536074" paint-order="stroke" stroke="#fafbfd" stroke-width="5">${escapeHtml(e.label)}</text>`:''}`}).join('');
-    const nodes=graph.nodes.map(n=>{const x=n.x,y=n.y;if(n.type==='decision')return`<polygon points="${x+56},${y} ${x+112},${y+45} ${x+56},${y+90} ${x},${y+45}" fill="#fffaf0" stroke="${theme.decision}" stroke-width="2"/>${svgText(n.label,x+56,y+49,9)}`;return`<rect x="${x}" y="${y}" width="166" height="62" rx="${n.type==='terminal'?31:8}" fill="${n.type==='terminal'?'#f1fbf7':'#fff'}" stroke="${n.type==='terminal'?theme.terminal:theme.process}" stroke-width="2"/>${svgText(n.label,x+83,y+36,12)}`}).join('');
-    svg.innerHTML=`<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3z" fill="#8b97aa"/></marker></defs>${lanes}${edges}${nodes}`;
-  }catch(error){$('#status').textContent=error.message;$('#status').className='status error';svg.innerHTML=''}
+    const graph=graphOverride||layout(parse(source.value)),theme=themes[$('#theme').value]||themes.blue;lastGraph=graph;$('#editEdgeBtn').disabled=!graph.edges.length;$('#editTextBtn').disabled=!graph.nodes.length&&!graph.laneTokens.length;$('#orientation').value=graph.settings.orientation;$('#longLinks').value=graph.settings.longLinks;$('#status').textContent=graph.nodes.length?`${graph.lanes.length}レーン・${graph.nodes.length}工程`:' ';$('#status').className='status';$('#empty').style.display=graph.nodes.length||graph.settings.media.length?'none':'grid';if(graph.settings.media.length)$('#status').textContent+=`・${graph.settings.media.length}カード`;
+    if($('#theme').value==='mono')graph.routes.forEach((route,index)=>{route.color='#596374';route.dash=['','7 4','2 4','9 3 2 3'][index%4]});
+    svg.setAttribute('viewBox',`0 0 ${graph.width} ${graph.height}`);
+    const byId=new Map(graph.nodes.map(n=>[n.id,n]));
+    const lanes=graph.laneBands.map((band,index)=>{
+      const bounds=graph.vertical?`x="${band.start}" y="0" width="${band.size}" height="${graph.height}"`:`x="0" y="${band.start}" width="${graph.width}" height="${band.size}"`;
+      const head=graph.vertical?`x="${band.start}" y="0" width="${band.size}" height="70"`:`x="0" y="${band.start}" width="150" height="${band.size}"`;
+      return `<rect ${bounds} fill="${index%2?theme.lane2:theme.lane1}" stroke="#dbe1ea"/><g class="flow-lane" data-lane="${index}" role="button" tabindex="0" aria-label="${escapeAttr(band.lane+' の担当名を編集')}"><title>クリックして担当名を変更</title><rect class="lane-head" ${head} fill="${index%2?theme.head2:theme.head1}" stroke="#dbe1ea"/>${svgText(band.lane,graph.vertical?band.start+band.size/2:75,graph.vertical?40:band.start+band.size/2+5,graph.vertical?16:8)}</g>`;
+    }).join('');
+    const edges=graph.edges.map((edge,index)=>{
+      const p=graph.routes[index],name='線'+(index+1)+'：'+byId.get(edge.from).label+' → '+byId.get(edge.to).label+' の線を編集';
+      return `<g class="flow-edge" data-edge="${index}" tabindex="0" role="button" aria-label="${escapeAttr(name)}"><title>${escapeHtml(name)}</title><path class="edge-hit" data-editor-only="true" d="${p.d}" fill="none" stroke="transparent" stroke-width="18" vector-effect="non-scaling-stroke" pointer-events="stroke"/><path d="${p.d}" fill="none" stroke="#fff" stroke-width="6"/><path class="edge-line" d="${p.d}" fill="none" stroke="${p.color}" stroke-width="2.3" stroke-dasharray="${p.dash}" marker-end="url(#arrow${index})"/>${p.jump?'':renderEdgeLabel(edge.label,p,p.color)}</g>`;
+    }).join('');
+    const referenced=new Set(graph.routes.filter(p=>p.jump).map(p=>p.badge.target));
+    const nodes=graph.nodes.map((n,index)=>{
+      const x=n.x,y=n.y,w=n.width,h=n.height,shape=n.type==='decision'?`<polygon class="node-shape" points="${x+w/2},${y} ${x+w},${y+h/2} ${x+w/2},${y+h} ${x},${y+h/2}" fill="#fffaf0" stroke="${theme.decision}" stroke-width="2"/>`:`<rect class="node-shape" x="${x}" y="${y}" width="${w}" height="${h}" rx="${n.type==='terminal'?31:8}" fill="${n.type==='terminal'?'#f1fbf7':'#fff'}" stroke="${n.type==='terminal'?theme.terminal:theme.process}" stroke-width="2"/>`;
+      const number=referenced.has(n.id)?`<rect x="${x+w-23}" y="${y-17}" width="42" height="26" rx="13" fill="#edf3ff" stroke="#4268b0"/><text x="${x+w-2}" y="${y+2}" text-anchor="middle" font-size="17" fill="#315cb8">${referenceNumber(n.number)}</text>`:'';
+      const colors={blue:['#edf3ff','#527acb'],green:['#eaf7f0','#389573'],orange:['#fff5e5','#c89432'],purple:['#f3edff','#9061c4'],pink:['#fff0f5','#c9698b']},custom=$('#theme').value==='mono'?null:colors[n.color];
+      const styled=custom?shape.replace(/fill="[^"]+"/,`fill="${custom[0]}"`).replace(/stroke="[^"]+"/,`stroke="${custom[1]}"`):shape;
+      return `<g class="flow-node" data-node="${index}" tabindex="0" role="button" aria-label="${escapeAttr(n.label+' を選択')}"><title>クリックで選択・ドラッグで移動・ダブルクリックで文字編集</title><rect class="selection-ring" data-editor-only="true" x="${x-7}" y="${y-7}" width="${w+14}" height="${h+14}" rx="10" fill="none" stroke="#356ae6" stroke-dasharray="4 4"/>${styled}${svgText(n.label,x+w/2,y+h/2+5,n.type==='decision'?9:12)}${number}</g>`;
+    }).join('');
+    const jumps=graph.routes.filter(p=>p.jump).map(p=>`<g class="flow-jump" data-jump="${graph.nodes.findIndex(n=>n.id===p.badge.target)}" tabindex="0" role="button" aria-label="${escapeAttr(referenceNumber(byId.get(p.badge.target).number)+'へ：'+byId.get(p.badge.target).label+' に移動')}"><title>番号をクリックして接続先に移動</title>${renderEdgeLabel(p.badge.text,{lx:p.badge.x,ly:p.badge.y},p.color)}</g>`).join('');
+    const markers=graph.routes.map(p=>`<marker id="arrow${p.index}" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3z" fill="${p.color}"/></marker>`).join('');
+    svg.innerHTML=`<defs>${markers}</defs>${lanes}${edges}${nodes}${jumps}${renderMediaCards(graph.settings.media)}`;
+    syncSelection();if(!dragState){if(fitToView)fitDiagram();else applyZoom();hydrateAssets()}
+  }catch(error){lastGraph=null;$('#editEdgeBtn').disabled=true;$('#status').textContent=error.message;$('#status').className='status error';svg.innerHTML=''}
 }
-let timer;source.addEventListener('input',()=>{render();$('#saved').textContent='保存中…';clearTimeout(timer);timer=setTimeout(()=>{storageSet('simple-flow-source',source.value);$('#saved').textContent='自動保存済み'},350)});
-$('#flowName').addEventListener('input',e=>storageSet('simple-flow-name',e.target.value));
-$('#theme').value=storageGet('simple-flow-theme','blue');$('#theme').onchange=e=>{storageSet('simple-flow-theme',e.target.value);render()};
-$('#helpBtn').onclick=()=>$('#examples').classList.toggle('show');document.querySelectorAll('[data-example]').forEach(b=>b.onclick=()=>{source.value=examples[b.dataset.example];source.dispatchEvent(new Event('input'));$('#examples').classList.remove('show')});
+function selectDialogEdge(){
+  editingEdge=lastGraph?.edges[Number($('#edgeSelect').value)]||null;if(!editingEdge)return;
+  $('#edgeLabel').value=editingEdge.label;$('#edgeMode').value=connectionMode(lastGraph.settings,editingEdge);$('#edgeLaneHint').textContent='担当レーン：'+editingEdge.occurrences[0].lane;
+  svg.querySelectorAll('[data-edge]').forEach(el=>el.classList.toggle('is-selected',Number(el.dataset.edge)===Number($('#edgeSelect').value)));
+  $('#edgeError').hidden=true;
+}
+function openEdgeEditor(index=0){
+  if(!lastGraph?.edges.length)return;
+  const select=$('#edgeSelect'),byId=new Map(lastGraph.nodes.map(node=>[node.id,node]));select.replaceChildren();
+  lastGraph.edges.forEach((edge,i)=>{const option=document.createElement('option');option.value=i;option.textContent='線'+(i+1)+'：'+byId.get(edge.from).label+' → '+byId.get(edge.to).label+(edge.label?'（'+edge.label+'）':'');select.appendChild(option)});
+  editingSource=source.value;select.value=index;$('#edgeNodeLabel').value='';selectDialogEdge();$('#edgeDialog').showModal();$('#edgeLabel').focus();$('#edgeLabel').select();
+}
+function applyDiagramText(next,dialog=$('#edgeDialog'),errorElement=$('#edgeError')){
+  if(source.value!==editingSource){errorElement.textContent='入力内容が変わりました。閉じて選び直してください。';errorElement.hidden=false;return false}
+  if(next===source.value)return true;
+  let start=0,end=source.value.length,nextEnd=next.length;
+  while(start<end&&start<nextEnd&&source.value[start]===next[start])start++;
+  while(end>start&&nextEnd>start&&source.value[end-1]===next[nextEnd-1]){end--;nextEnd--}
+  // Close first so native textarea editing/undo is available outside the modal.
+  dialog?.close();insertText(next.slice(start,nextEnd),start,end);return true;
+}
+$('#editEdgeBtn').onclick=()=>openEdgeEditor();
+$('#edgeSelect').onchange=selectDialogEdge;
+$('#closeEdgeDialog').onclick=()=>$('#edgeDialog').close();
+$('#edgeDialog').addEventListener('close',()=>{editingEdge=null;svg.querySelectorAll('.is-selected').forEach(el=>el.classList.remove('is-selected'));syncSelection();$('#editEdgeBtn').focus()});
+function setEditMode(mode){document.body.classList.toggle('visual-mode',mode==='visual');document.body.classList.toggle('text-mode',mode==='text');$('#visualModeBtn').setAttribute('aria-pressed',String(mode==='visual'));$('#textModeBtn').setAttribute('aria-pressed',String(mode==='text'));storageSet('simple-flow-editor-mode',mode);if(fitToView)requestAnimationFrame(fitDiagram)}
+$('#visualModeBtn').onclick=()=>setEditMode('visual');$('#textModeBtn').onclick=()=>setEditMode('text');
+function syncSelection(){
+  const node=lastGraph?.nodes.find(n=>n.id===selectedNodeId);if(!node)selectedNodeId=null;
+  svg.querySelectorAll('[data-node]').forEach(el=>{const selected=lastGraph.nodes[Number(el.dataset.node)]?.id===selectedNodeId;el.classList.toggle('is-selected',selected);el.setAttribute('aria-pressed',String(selected))});
+  $('#inspector').hidden=!node;$('#inspectorEmpty').hidden=!!node;syncMediaInspector();
+  if(node&&!dragState){$('#shapeName').value=node.label;$('#shapeType').value=node.type;$('#nodeColor').value=node.color||'auto';const select=$('#nodeLane');select.replaceChildren();lastGraph.lanes.forEach(lane=>{const option=document.createElement('option');option.value=lane;option.textContent=lane;select.appendChild(option)});select.value=node.lane;$('#inspectorError').hidden=true}
+  document.body.classList.toggle('connecting',!!connectingFrom);$('#connectBtn').setAttribute('aria-pressed',String(!!connectingFrom));$('#cancelConnectBtn').hidden=!connectingFrom;
+  $('#interactionHint').textContent=connectingFrom?'接続先の図形をクリックしてください（Escでキャンセル）':'図形・画像をドラッグで移動。画像やURLは Ctrl+V で追加';
+}
+function selectNode(id){selectedNodeId=id;selectedMediaId=null;syncSelection()}
+function cancelConnection(){connectingFrom=null;syncSelection()}
+function revealNode(id){const index=lastGraph.nodes.findIndex(n=>n.id===id),element=svg.querySelector(`[data-node="${index}"]`);element?.scrollIntoView({block:'center',inline:'center'});element?.focus({preventScroll:true})}
+function addFromPalette(type,copy=null){
+  const anchor=copy||lastGraph.nodes.find(n=>n.id===selectedNodeId)||lastGraph.nodes.at(-1),lane=anchor?.lane||lastGraph.lanes[0],band=lastGraph.laneBands.find(b=>b.lane===lane),vertical=lastGraph.vertical;
+  const position=anchor?{flow:(vertical?anchor.y+anchor.height:anchor.x+anchor.width)+80,cross:(vertical?anchor.x:anchor.y)-band.start+(copy?25:0)}:{flow:vertical?140:210,cross:55};
+  const label=copy?[...copy.label].slice(0,114).join('')+' のコピー':{process:'新しい処理',decision:'条件は？',terminal:'開始・終了'}[type];
+  const result=addVisualNode(source.value,lastGraph,{type,label,lane,color:copy?.color||'auto',position});fitToView=false;cancelConnection();commitDocument(result.text,{selection:result.id});revealNode(result.id);$('#shapeName').focus();$('#shapeName').select();
+}
+document.querySelectorAll('[data-add]').forEach(button=>button.onclick=()=>addFromPalette(button.dataset.add));
+$('#addLaneBtn').onclick=()=>{let number=1;while(lastGraph.lanes.includes('担当'+number))number++;const label='担当'+number;commitDocument(appendFlow(source.value,label,''));openTextEditor('lane:'+lastGraph.lanes.indexOf(label))};
+$('#inspectorForm').onsubmit=event=>{event.preventDefault();if(!selectedNodeId)return;try{const next=updateNode(source.value,lastGraph,selectedNodeId,{label:$('#shapeName').value,type:$('#shapeType').value,lane:$('#nodeLane').value,color:$('#nodeColor').value});commitDocument(next);toast('図形を更新しました')}catch(error){$('#inspectorError').textContent=error.message;$('#inspectorError').hidden=false}};
+$('#connectBtn').onclick=()=>{if(connectingFrom)return cancelConnection();connectingFrom=selectedNodeId;syncSelection()};$('#cancelConnectBtn').onclick=cancelConnection;
+function duplicateSelected(){if(selectedMediaId)return duplicateMedia();const node=lastGraph.nodes.find(n=>n.id===selectedNodeId);if(node)addFromPalette(node.type,node)}
+function deleteSelected(){if(selectedMediaId)return deleteMedia();if(!selectedNodeId)return;const next=removeFromFlow(source.value,selectedNodeId);cancelConnection();commitDocument(next,{selection:null});toast('図形と接続を削除しました。「戻す」で取り消せます')}
+$('#duplicateBtn').onclick=duplicateSelected;$('#deleteNodeBtn').onclick=deleteSelected;
+$('#deleteEdgeBtn').onclick=()=>{if(!editingEdge)return;const next=removeFromFlow(source.value,null,editingEdge);$('#edgeDialog').close();commitDocument(next);toast('線を削除しました。「戻す」で取り消せます')};
+$('#undoBtn').onclick=()=>restoreHistory(undoStack,redoStack);$('#redoBtn').onclick=()=>restoreHistory(redoStack,undoStack);
+$('#arrangeBtn').onclick=()=>{cancelConnection();fitToView=true;commitDocument(resetPositions(source.value));fitDiagram();toast('現在の向きで自動整列しました')};
+svg.addEventListener('pointerdown',event=>{
+  if(event.button!==0||connectingFrom||event.target.closest('foreignObject'))return;
+  const media=event.target.closest('[data-media]'),target=event.target.closest('[data-node]');if(!target&&!media)return;
+  const item=media?lastGraph.settings.media.find(card=>card.id===media.dataset.media):lastGraph.nodes[Number(target.dataset.node)];
+  if(media)selectMedia(item.id);else selectNode(item.id);
+  const inverse=svg.getScreenCTM().inverse(),point=new DOMPoint(event.clientX,event.clientY).matrixTransform(inverse);
+  dragState={kind:media?(event.target.closest('[data-resize]')?'resize':'media'):'node',id:item.id,pointerId:event.pointerId,startX:point.x,startY:point.y,nodeX:item.x,nodeY:item.y,width:item.width,height:item.height,clientX:event.clientX,clientY:event.clientY,inverse,moved:false};
+});
+document.addEventListener('pointermove',event=>{
+  if(!dragState||event.pointerId!==dragState.pointerId)return;
+  if(!dragState.moved&&Math.hypot(event.clientX-dragState.clientX,event.clientY-dragState.clientY)<5)return;
+  event.preventDefault();if(!dragState.moved){dragState.moved=true;fitToView=false;svg.setPointerCapture(event.pointerId);document.body.classList.add('dragging')}
+  const point=new DOMPoint(event.clientX,event.clientY).matrixTransform(dragState.inverse),snap=$('#snapGrid').checked&&!event.shiftKey,grid=v=>snap?Math.round(v/10)*10:v,dx=point.x-dragState.startX,dy=point.y-dragState.startY;
+  if(dragState.kind==='node'){
+    const node=lastGraph.nodes.find(n=>n.id===dragState.id);node.x=Math.max(lastGraph.vertical?20:170,grid(dragState.nodeX+dx));node.y=Math.max(lastGraph.vertical?90:20,grid(dragState.nodeY+dy));node.manual=true;dragState.snap=snap;lastGraph.routes=routeConnections(lastGraph);
+  }else{
+    const card=selectedMedia();if(dragState.kind==='resize'){const asset=assetCache.get(card.assetId),ratio=card.type==='image'&&card.aspect&&!event.shiftKey?(asset?asset.width/asset.height:(dragState.width-24)/(dragState.height-52)):null;
+      let width=dragState.width+dx;if(ratio&&Math.abs(dy*ratio)>Math.abs(dx))width=dragState.width+dy*ratio;Object.assign(card,resizeMedia(card,grid(width),grid(dragState.height+dy),ratio));
+    }else{card.x=Math.max(12,Math.min(12000,grid(dragState.nodeX+dx)));card.y=Math.max(12,Math.min(12000,grid(dragState.nodeY+dy)))}
+  }
+  render(lastGraph);
+});
+function finishDrag(event,cancel=false){
+  if(!dragState||event.pointerId!==dragState.pointerId)return;const state=dragState,node=lastGraph.nodes.find(n=>n.id===state.id),card=selectedMedia();dragState=null;document.body.classList.remove('dragging');if(svg.hasPointerCapture(event.pointerId))svg.releasePointerCapture(event.pointerId);
+  if(state.moved){ignoreClickUntil=performance.now()+250;if(cancel)render();else if(state.kind==='node')commitDocument(moveVisualNode(source.value,lastGraph,state.id,node.x,node.y,state.snap));else commitDocument(changeMedia(source.value,state.id,{x:card.x,y:card.y,width:card.width,height:card.height}));syncSelection()}else syncSelection();
+}
+document.addEventListener('pointerup',event=>finishDrag(event));document.addEventListener('pointercancel',event=>finishDrag(event,true));
+svg.addEventListener('dblclick',event=>{if(event.target.closest('foreignObject'))return;const media=event.target.closest('[data-media]');if(media){selectMedia(media.dataset.media);$('#mediaTitle').focus();$('#mediaTitle').select();return}const target=event.target.closest('[data-node]');if(target&&!connectingFrom)openTextEditor('node:'+target.dataset.node)});
+function activateDiagram(event){
+  if(event.type==='click'&&performance.now()<ignoreClickUntil)return;
+  if(event.target.closest('foreignObject'))return;const target=event.target.closest('[data-edge],[data-node],[data-lane],[data-jump],[data-media]');if(!target){if(event.type==='click'){cancelConnection();selectNode(null)}return}
+  if(event.type==='keydown'){if(event.key!=='Enter'&&event.key!==' ')return;event.preventDefault()}
+  if(target.hasAttribute('data-media')){selectMedia(target.dataset.media);if(event.type==='keydown'){$('#mediaTitle').focus();$('#mediaTitle').select()}return}
+  if(target.hasAttribute('data-jump')){
+    const index=Number(target.dataset.jump),node=svg.querySelector(`[data-node="${index}"]`);node.scrollIntoView({block:'center',inline:'center',behavior:'smooth'});node.focus({preventScroll:true});node.classList.add('is-target');setTimeout(()=>node.classList.remove('is-target'),1800);return;
+  }
+  if(target.hasAttribute('data-node')){
+    const node=lastGraph.nodes[Number(target.dataset.node)];
+    if(connectingFrom){try{const next=connectNodes(source.value,lastGraph,connectingFrom,node.id);if(next===source.value){toast('すでに接続されています');cancelConnection()}else{cancelConnection();commitDocument(next,{selection:node.id});toast('図形を接続しました')}}catch(error){toast(error.message)}return}
+    selectNode(node.id);if(event.type==='keydown'){setEditMode('visual');$('#shapeName').focus();$('#shapeName').select()}return;
+  }
+  if(target.hasAttribute('data-lane'))return openTextEditor('lane:'+target.dataset.lane);
+  openEdgeEditor(Number(target.dataset.edge));
+}
+svg.addEventListener('click',activateDiagram);svg.addEventListener('keydown',activateDiagram);
+$('#edgeLabelForm').addEventListener('submit',event=>{
+  event.preventDefault();if(!editingEdge)return;
+  const label=$('#edgeLabel').value.trim(),next=setConnectionMode(editEdgeLabel(source.value,editingEdge,label),{...editingEdge,label},$('#edgeMode').value);
+  if(applyDiagramText(next)){$('#edgeDialog').close();toast('線の文字・表示方法を更新しました')}
+});
+$('#edgeNodeForm').addEventListener('submit',event=>{
+  event.preventDefault();if(!editingEdge)return;
+  const edge={...editingEdge,label:$('#edgeLabel').value.trim()},next=insertEdgeNode(source.value,lastGraph,edge,$('#edgeNodeType').value,$('#edgeNodeLabel').value.trim());
+  const text=setConnectionMode(next.text,{from:next.id,to:edge.to,label:''},$('#edgeMode').value);
+  if(applyDiagramText(text)){$('#edgeDialog').close();toast('線の途中に図形を挿入しました')}
+});
+function selectTextTarget(){
+  const [kind,index]=$('#textTarget').value.split(':');$('#displayText').maxLength=kind==='node'?120:40;$('#displayText').value=kind==='node'?lastGraph.nodes[Number(index)].label:lastGraph.lanes[Number(index)];$('#textError').hidden=true;
+}
+function openTextEditor(target=lastGraph?.nodes.length?'node:0':'lane:0'){
+  if(!lastGraph)return;const select=$('#textTarget');select.replaceChildren();
+  for(const [kind,items] of [['node',lastGraph.nodes.map(n=>n.label)],['lane',lastGraph.lanes]])items.forEach((label,index)=>{const option=document.createElement('option');option.value=kind+':'+index;option.textContent=(kind==='node'?'図形：':'担当：')+label;select.appendChild(option)});
+  editingSource=source.value;select.value=target;selectTextTarget();$('#textDialog').showModal();$('#displayText').focus();$('#displayText').select();
+}
+$('#editTextBtn').onclick=()=>openTextEditor();$('#textTarget').onchange=selectTextTarget;
+$('#closeTextDialog').onclick=()=>$('#textDialog').close();
+$('#textDialog').addEventListener('close',()=>$('#editTextBtn').focus());
+$('#textEditForm').addEventListener('submit',event=>{
+  event.preventDefault();const [kind,index]=$('#textTarget').value.split(':'),label=$('#displayText').value;
+  try{const next=kind==='node'?editNodeText(source.value,lastGraph,lastGraph.nodes[Number(index)].id,label):editLaneText(source.value,lastGraph,lastGraph.lanes[Number(index)],label);
+    if(applyDiagramText(next,$('#textDialog'),$('#textError'))){$('#textDialog').close();toast('表示する文字を更新しました')}
+  }catch(error){$('#textError').textContent=error.message;$('#textError').hidden=false}
+});
+for(const id of ['orientation','longLinks'])$('#'+id).onchange=()=>{editingSource=source.value;const settings=readSettings(source.value);settings[id]=$('#'+id).value;fitToView=true;applyDiagramText(writeSettings(source.value,settings),null);$('#'+id).focus()};
+source.addEventListener('input',event=>commitDocument(source.value,{typing:event.isTrusted}));
+$('#flowName').addEventListener('input',saveDraft);
+const savedTheme=storageGet('simple-flow-theme','blue');$('#theme').value=Object.hasOwn(themes,savedTheme)?savedTheme:'blue';$('#theme').onchange=()=>{saveDraft();render()};
+function showExamples(open){$('#examples').classList.toggle('show',open);$('#helpBtn').setAttribute('aria-expanded',String(open));if(open)$('#closeExamples').focus();else $('#helpBtn').focus()}
+$('#helpBtn').onclick=()=>showExamples(!$('#examples').classList.contains('show'));
+$('#closeExamples').onclick=()=>showExamples(false);
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('#edgeDialog').open&&!$('#textDialog').open&&$('#examples').classList.contains('show')){event.preventDefault();showExamples(false)}});
+document.querySelectorAll('[data-example]').forEach(b=>b.onclick=()=>{source.value=examples[b.dataset.example];source.dispatchEvent(new Event('input'));showExamples(false);source.focus();source.setSelectionRange(source.value.length,source.value.length)});
 $('#resetBtn').onclick=()=>{if(confirm('入力内容を消して新しく作成しますか？')){source.value='開始 → ';source.dispatchEvent(new Event('input'));source.focus()}};
 function toast(text){const el=$('#toast');el.textContent=text;el.classList.add('show');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>el.classList.remove('show'),1600)}
-$('#copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(source.value);toast('入力内容をコピーしました')}catch{source.select();document.execCommand('copy');toast('入力内容をコピーしました')}};
-$('#loadBtn').onclick=()=>$('#fileInput').click();$('#fileInput').onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{source.value=String(reader.result||'');source.dispatchEvent(new Event('input'));toast('テキストを読み込みました')};reader.onerror=()=>toast('ファイルを読み込めませんでした');reader.readAsText(file);e.target.value=''};
-function setZoom(value){zoom=Math.max(.5,Math.min(1.5,value));svg.style.transform=`scale(${zoom})`;$('#zoomValue').textContent=Math.round(zoom*100)+'%'}
-$('#zoomIn').onclick=()=>setZoom(zoom+.1);$('#zoomOut').onclick=()=>setZoom(zoom-.1);$('#fitBtn').onclick=()=>{const box=document.querySelector('.canvas'),view=svg.viewBox.baseVal;if(!view.width)return;setZoom(Math.min(1,(box.clientWidth-30)/view.width));box.scrollTo(0,0)};
-$('#downloadBtn').onclick=()=>{if(!svg.innerHTML)return;const copy=svg.cloneNode(true),view=svg.viewBox.baseVal;copy.setAttribute('xmlns','http://www.w3.org/2000/svg');copy.setAttribute('width',view.width);copy.setAttribute('height',view.height);copy.style.transform='';const blob=new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'}),a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=($('#flowName').value||'業務フロー')+'.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('画像を保存しました')};
-$('#pngBtn').onclick=()=>{if(!svg.innerHTML)return;const copy=svg.cloneNode(true),view=svg.viewBox.baseVal,scale=2;copy.setAttribute('xmlns','http://www.w3.org/2000/svg');copy.setAttribute('width',view.width);copy.setAttribute('height',view.height);copy.style.transform='';const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'})),img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=view.width*scale;canvas.height=view.height*scale;const context=canvas.getContext('2d');context.scale(scale,scale);context.fillStyle='#fff';context.fillRect(0,0,view.width,view.height);context.drawImage(img,0,0);URL.revokeObjectURL(url);canvas.toBlob(blob=>{if(!blob)return toast('PNGを作成できませんでした');const a=document.createElement('a'),pngUrl=URL.createObjectURL(blob);a.href=pngUrl;a.download=($('#flowName').value||'業務フロー')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(pngUrl),1000);toast('PNG画像を保存しました')},'image/png')};img.onerror=()=>{URL.revokeObjectURL(url);toast('PNGを作成できませんでした')};img.src=url};
-render();
+$('#copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(source.value);toast('入力内容をコピーしました')}catch{setEditMode('text');source.select();document.execCommand('copy');toast('入力内容をコピーしました')}};
+$('#loadBtn').onclick=()=>$('#fileInput').click();$('#fileInput').onchange=async event=>{const file=event.target.files[0];event.target.value='';if(!file)return;try{await importBoardFile(file)}catch(error){toast(error.message)}};
+$('#saveTextBtn').onclick=()=>{const blob=new Blob([source.value],{type:'text/plain;charset=utf-8'}),a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=($('#flowName').value||'業務フロー')+'.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('編集用テキストを保存しました')};
+function applyZoom(){const view=svg.viewBox.baseVal;svg.style.width=view.width*zoom+'px';svg.style.height=view.height*zoom+'px';$('#zoomValue').textContent=(zoom<.1?(zoom*100).toFixed(1):Math.round(zoom*100))+'%'}
+function setZoom(value){fitToView=false;zoom=Math.max(.1,Math.min(2,value));applyZoom()}
+function fitDiagram(){
+  const view=svg.viewBox.baseVal,style=getComputedStyle(canvas);
+  const width=canvas.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)-2,height=canvas.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)-2;
+  if(!view.width||!view.height||width<=0||height<=0)return;
+  fitToView=true;zoom=Math.min(1,width/view.width,height/view.height);applyZoom();canvas.scrollTo(0,0);
+}
+$('#zoomIn').onclick=()=>setZoom(zoom+.1);$('#zoomOut').onclick=()=>setZoom(zoom-.1);$('#fitBtn').onclick=fitDiagram;
+new ResizeObserver(()=>{if(fitToView)fitDiagram()}).observe(canvas);
+function exportSvg(){
+  const copy=svg.cloneNode(true),view=svg.viewBox.baseVal;
+  copy.setAttribute('xmlns','http://www.w3.org/2000/svg');copy.setAttribute('width',view.width);copy.setAttribute('height',view.height);copy.setAttribute('font-family','sans-serif');copy.removeAttribute('style');
+  copy.querySelectorAll('[data-editor-only],title,foreignObject').forEach(el=>el.remove());
+  copy.querySelectorAll('[data-edge],[data-node],[data-lane],[data-jump],[data-media]').forEach(el=>{for(const attribute of ['data-edge','data-node','data-lane','data-jump','data-media','role','tabindex','aria-label','aria-pressed','class'])el.removeAttribute(attribute)});
+  return copy;
+}
+$('#downloadBtn').onclick=async()=>{if(!svg.innerHTML||!await ensureExportAssets())return;const copy=exportSvg(),blob=new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'}),a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=($('#flowName').value||'業務フロー')+'.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('画像を保存しました')};
+$('#pngBtn').onclick=async()=>{if(!svg.innerHTML||!await ensureExportAssets())return;const copy=exportSvg(),view=svg.viewBox.baseVal,scale=2;const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'})),img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=view.width*scale;canvas.height=view.height*scale;const context=canvas.getContext('2d');context.scale(scale,scale);context.fillStyle='#fff';context.fillRect(0,0,view.width,view.height);context.drawImage(img,0,0);URL.revokeObjectURL(url);canvas.toBlob(blob=>{if(!blob)return toast('PNGを作成できませんでした');const a=document.createElement('a'),pngUrl=URL.createObjectURL(blob);a.href=pngUrl;a.download=($('#flowName').value||'業務フロー')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(pngUrl),1000);toast('PNG画像を保存しました')},'image/png')};img.onerror=()=>{URL.revokeObjectURL(url);toast('PNGを作成できませんでした')};img.src=url};
+document.addEventListener('keydown',event=>{
+  const editing=event.target.closest('input,textarea,select,[contenteditable="true"]'),dialog=document.querySelector('dialog[open]');
+  if(event.key==='Escape'&&!dialog){if(dragState){finishDrag({pointerId:dragState.pointerId},true);event.preventDefault()}cancelConnection();return}
+  if(dialog||dragState||(editing&&event.target!==source))return;
+  const modifier=event.ctrlKey||event.metaKey,key=event.key.toLowerCase();
+  if(modifier&&(key==='z'||key==='y')){event.preventDefault();if(key==='y'||event.shiftKey)restoreHistory(redoStack,undoStack);else restoreHistory(undoStack,redoStack)}
+  if(!editing&&modifier&&key==='d'){event.preventDefault();duplicateSelected()}
+  if(!editing&&(event.key==='Delete'||event.key==='Backspace')){event.preventDefault();deleteSelected()}
+  if(!editing&&!modifier&&selectedMediaId&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const card=selectedMedia(),step=event.shiftKey?1:10;fitToView=false;commitDocument(changeMedia(source.value,card.id,{x:card.x+(event.key==='ArrowRight'?step:event.key==='ArrowLeft'?-step:0),y:card.y+(event.key==='ArrowDown'?step:event.key==='ArrowUp'?-step:0)}));revealMedia(card.id)}
+  if(!editing&&!modifier&&selectedNodeId&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const node=lastGraph.nodes.find(n=>n.id===selectedNodeId),step=event.shiftKey?1:10;fitToView=false;commitDocument(moveVisualNode(source.value,lastGraph,node.id,node.x+(event.key==='ArrowRight'?step:event.key==='ArrowLeft'?-step:0),node.y+(event.key==='ArrowDown'?step:event.key==='ArrowUp'?-step:0),false));revealNode(node.id)}
+});
+// Images live in IndexedDB; lightweight card metadata participates in text undo.
+let assetDatabase=null,activeEmbedId=null,selectedMediaId=null;
+const assetCache=new Map(),missingAssets=new Set(),loadingAssets=new Map(),unsavedAssets=new Set();
+function openAssetDatabase(){
+  if(!assetDatabase)assetDatabase=new Promise((resolve,reject)=>{
+    const request=indexedDB.open('simple-flow-assets',1);
+    request.onupgradeneeded=()=>request.result.createObjectStore('assets',{keyPath:'id'});
+    request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('画像の保存先を開けません'));
+  });return assetDatabase;
+}
+async function assetTransaction(mode,operation){
+  const db=await openAssetDatabase();return new Promise((resolve,reject)=>{const tx=db.transaction('assets',mode),request=operation(tx.objectStore('assets'));let result;request.onsuccess=()=>{result=request.result};tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('画像を保存できません'))});
+}
+async function storeAsset(asset){
+  assetCache.set(asset.id,asset);missingAssets.delete(asset.id);
+  try{await assetTransaction('readwrite',store=>store.put(asset));unsavedAssets.delete(asset.id)}catch{unsavedAssets.add(asset.id)}
+}
+async function getAsset(id){
+  if(assetCache.has(id))return assetCache.get(id);if(missingAssets.has(id))return null;
+  if(!loadingAssets.has(id))loadingAssets.set(id,(async()=>{try{const asset=await assetTransaction('readonly',store=>store.get(id));if(asset){assetCache.set(id,asset);return asset}}catch{}missingAssets.add(id);return null})().finally(()=>loadingAssets.delete(id)));
+  return loadingAssets.get(id);
+}
+async function hydrateAssets(){
+  const needed=readSettings(source.value).media.filter(card=>card.type==='image'&&!assetCache.has(card.assetId)&&!missingAssets.has(card.assetId));
+  if(!needed.length)return;await Promise.all(needed.map(card=>getAsset(card.assetId)));if(!dragState)render();saveDraft();
+}
+function newMediaId(prefix){return prefix+'-'+crypto.randomUUID()}
+function visibleMediaPosition(offset=0){
+  const rect=canvas.getBoundingClientRect(),point=new DOMPoint(rect.left+canvas.clientWidth/2,rect.top+Math.min(canvas.clientHeight/2,250)).matrixTransform(svg.getScreenCTM().inverse());
+  return {x:Math.max(170,Math.round(point.x-180)+offset),y:Math.max(30,Math.round(point.y-120)+offset)};
+}
+function selectedMedia(){return lastGraph?.settings.media.find(card=>card.id===selectedMediaId)}
+function revealMedia(id){const el=svg.querySelector(`[data-media="${id}"]`);el?.scrollIntoView({block:'nearest',inline:'nearest'});el?.focus({preventScroll:true})}
+function selectMedia(id){connectingFrom=null;selectedNodeId=null;selectedMediaId=id;setEditMode('visual');syncSelection()}
+function addMediaCards(cards){
+  const existing=readSettings(source.value).media;if(existing.length+cards.length>100)throw new Error('カードは1つのボードに100枚まで追加できます');
+  fitToView=false;commitDocument(setMediaCards(source.value,[...existing,...cards]),{selection:null,mediaSelection:cards.at(-1).id});setEditMode('visual');revealMedia(cards.at(-1).id);
+}
+async function decodeImage(dataUrl){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('画像を読み込めませんでした'));img.src=dataUrl})}
+async function prepareImage(file){
+  if(!/^image\/(png|jpeg|webp|gif|bmp)$/.test(file.type))throw new Error('PNG・JPEG・WebP・GIF・BMPの画像を選んでください');
+  if(file.size>20000000)throw new Error('画像は1枚20MBまでです');
+  const objectUrl=URL.createObjectURL(file);let img;try{img=await decodeImage(objectUrl)}finally{URL.revokeObjectURL(objectUrl)}
+  if(!img.naturalWidth||!img.naturalHeight||img.naturalWidth*img.naturalHeight>60000000)throw new Error('画像のサイズが大きすぎます');
+  const scale=Math.min(1,2000/Math.max(img.naturalWidth,img.naturalHeight)),buffer=document.createElement('canvas');buffer.width=Math.max(1,Math.round(img.naturalWidth*scale));buffer.height=Math.max(1,Math.round(img.naturalHeight*scale));buffer.getContext('2d').drawImage(img,0,0,buffer.width,buffer.height);
+  return {id:newMediaId('asset'),dataUrl:buffer.toDataURL(file.type==='image/jpeg'?'image/jpeg':'image/png',.9),width:buffer.width,height:buffer.height};
+}
+async function addImages(files,position=null){
+  const images=[...files].filter(file=>file.type.startsWith('image/'));if(!images.length)return toast('画像ファイルを選んでください');
+  if(readSettings(source.value).media.length+images.length>100)return toast('カードは100枚まで追加できます');
+  toast('画像を読み込んでいます…');const cards=[],errors=[];
+  for(const file of images){try{const asset=await prepareImage(file);await storeAsset(asset);const ratio=asset.width/asset.height,width=Math.max(180,Math.min(440,asset.width+24)),size=resizeMedia({},width,260,ratio);cards.push({id:newMediaId('media'),type:'image',title:(!file.name||/^(clipboard|image)\./i.test(file.name)?'貼り付けた画像':file.name).replace(/\.[^.]+$/,'').slice(0,100),assetId:asset.id,...(position||visibleMediaPosition()),x:(position||visibleMediaPosition()).x+cards.length*28,y:(position||visibleMediaPosition()).y+cards.length*28,...size,aspect:true,border:'gray'})}catch(error){errors.push(error.message)}}
+  try{if(cards.length)addMediaCards(cards);toast(errors.length?errors[0]:`${cards.length}枚の画像を追加しました`)}catch(error){toast(error.message)}saveDraft();
+}
+function addEmbed(url,title=''){
+  const safe=safeMediaUrl(url);if(!safe)throw new Error('http:// または https:// のURLを入力してください');
+  addMediaCards([{id:newMediaId('media'),type:'embed',url:safe,title:title.trim()||new URL(safe).hostname,...visibleMediaPosition(),width:400,height:280,aspect:false,border:'blue'}]);toast('リンクカードを追加しました');
+}
+function toggleEmbed(){const card=selectedMedia();if(card?.type!=='embed')return;activeEmbedId=activeEmbedId===card.id?null:card.id;render()}
+function syncMediaInspector(){
+  const card=selectedMedia();if(!card)selectedMediaId=null;
+  svg.querySelectorAll('[data-media]').forEach(el=>{const selected=el.dataset.media===selectedMediaId;el.classList.toggle('is-selected',selected);el.setAttribute('aria-pressed',String(selected))});
+  $('#mediaInspector').hidden=!card;$('#inspectorEmpty').hidden=!!card||!!selectedNodeId;
+  if(card&&!dragState){$('#mediaHeading').textContent=card.type==='image'?'画像カード':'リンク・埋め込み';$('#mediaTitle').value=card.title;$('#mediaWidth').value=Math.round(card.width);$('#mediaHeight').value=Math.round(card.height);$('#mediaAspect').checked=card.aspect;$('#mediaAspect').disabled=card.type!=='image';$('#mediaBorder').value=card.border;$('#previewEmbedBtn').hidden=card.type!=='embed';$('#previewEmbedBtn').textContent=activeEmbedId===card.id?'埋め込みを閉じる':'埋め込みを表示';$('#mediaLink').hidden=card.type!=='embed';if(card.url)$('#mediaLink').href=card.url;else $('#mediaLink').removeAttribute('href');$('#mediaHelp').textContent=card.type==='image'?'画像も持ち運ぶ場合は「ボード保存」を使います。右下のつまみでサイズを変更できます。':'外部サイトをボード内に表示します。表示を許可していないサイトは「リンクを開く」で確認できます。'}
+}
+function renderMediaCards(cards){
+  return cards.map(card=>{
+    const {x,y,width:w,height:h}=card,asset=assetCache.get(card.assetId),color={gray:'#cad3e0',blue:'#7198e5',green:'#65a78c',purple:'#a38ac9'}[card.border],title=escapeHtml([...card.title].slice(0,Math.max(5,Math.floor((w-30)/12))).join(''));
+    const image=asset?`<image href="${escapeAttr(asset.dataUrl)}" x="${x+12}" y="${y+40}" width="${w-24}" height="${h-52}" preserveAspectRatio="xMidYMid meet"/>`:`<text x="${x+w/2}" y="${y+h/2+16}" text-anchor="middle" font-size="12" fill="#78869a">${missingAssets.has(card.assetId)?'画像がありません：ボードファイルを読み込んでください':'画像を読み込み中…'}</text>`;
+    const site=card.type==='embed'?new URL(card.url):null,label=site?site.hostname+' '+site.pathname:'';
+    const poster=`<rect x="${x+12}" y="${y+40}" width="${w-24}" height="${h-52}" rx="8" fill="#f1f5fc"/><text x="${x+w/2}" y="${y+h/2-4}" text-anchor="middle" font-size="24" fill="#527acb">↗</text><text x="${x+w/2}" y="${y+h/2+24}" text-anchor="middle" font-size="12" fill="#425573">${escapeHtml([...label].slice(0,Math.floor((w-40)/8)).join(''))}</text><text data-editor-only="true" x="${x+w/2}" y="${y+h-28}" text-anchor="middle" font-size="11" fill="#78869a">選択して「埋め込みを表示」</text>`;
+    const allowOrigin=site&&site.origin!==location.origin?' allow-same-origin':'';
+    const live=activeEmbedId===card.id&&site&&!dragState?`<foreignObject data-editor-only="true" x="${x+12}" y="${y+40}" width="${w-24}" height="${h-52}"><div xmlns="http://www.w3.org/1999/xhtml" class="embed-container"><iframe src="${escapeAttr(card.url)}" title="${escapeAttr(card.title)}" sandbox="allow-scripts allow-forms allow-presentation${allowOrigin}" referrerpolicy="no-referrer" loading="lazy"></iframe></div></foreignObject>`:'';
+    return `<g class="media-card" data-media="${card.id}" tabindex="0" role="button" aria-label="${escapeAttr(card.title+' のカードを選択')}"><title>ドラッグで移動・右下でサイズ変更</title><rect x="${x+3}" y="${y+5}" width="${w}" height="${h}" rx="12" fill="#233858" opacity=".07"/><rect class="media-frame" x="${x}" y="${y}" width="${w}" height="${h}" rx="12" fill="#fff" stroke="${color}" stroke-width="2"/><text x="${x+14}" y="${y+25}" font-size="12" font-weight="650" fill="#43536c">${title}</text>${card.type==='image'?image:poster}${live}<rect class="resize-handle" data-resize="true" data-editor-only="true" x="${x+w-9}" y="${y+h-9}" width="18" height="18" rx="4" fill="#356ae6" stroke="#fff" stroke-width="2"/></g>`;
+  }).join('');
+}
+$('#addImageBtn').onclick=()=>$('#imageInput').click();$('#imageInput').onchange=event=>{addImages(event.target.files);event.target.value=''};
+$('#addEmbedBtn').onclick=()=>{$('#embedUrl').value='';$('#embedTitle').value='';$('#embedError').hidden=true;$('#embedDialog').showModal();$('#embedUrl').focus()};$('#closeEmbedDialog').onclick=()=>$('#embedDialog').close();
+$('#embedForm').onsubmit=event=>{event.preventDefault();try{addEmbed($('#embedUrl').value,$('#embedTitle').value);$('#embedDialog').close()}catch(error){$('#embedError').textContent=error.message;$('#embedError').hidden=false}};
+$('#previewEmbedBtn').onclick=toggleEmbed;
+$('#mediaForm').onsubmit=event=>{event.preventDefault();const card=selectedMedia();if(!card)return;const asset=assetCache.get(card.assetId),aspect=$('#mediaAspect').checked,ratio=card.type==='image'&&aspect?(asset?asset.width/asset.height:(card.width-24)/(card.height-52)):null;let width=Number($('#mediaWidth').value),height=Number($('#mediaHeight').value);if(ratio&&height!==Math.round(card.height)&&width===Math.round(card.width))width=(height-52)*ratio+24;const size=resizeMedia(card,width,height,ratio);commitDocument(changeMedia(source.value,card.id,{title:$('#mediaTitle').value.trim()||(card.type==='image'?'画像':'リンク'),width:size.width,height:size.height,aspect,border:$('#mediaBorder').value}));toast('カードを更新しました')};
+function duplicateMedia(){const card=selectedMedia();if(!card)return;try{addMediaCards([{...card,id:newMediaId('media'),title:card.title.slice(0,93)+' のコピー',x:card.x+30,y:card.y+30}])}catch(error){toast(error.message)}}
+function deleteMedia(){const card=selectedMedia();if(!card)return;if(activeEmbedId===card.id)activeEmbedId=null;commitDocument(setMediaCards(source.value,readSettings(source.value).media.filter(item=>item.id!==card.id)),{mediaSelection:null});toast('カードを削除しました。「戻す」で取り消せます')}
+$('#duplicateMediaBtn').onclick=duplicateMedia;$('#deleteMediaBtn').onclick=deleteMedia;
+document.addEventListener('paste',event=>{
+  if(document.querySelector('dialog[open]'))return;const images=[...(event.clipboardData?.files||[])].filter(file=>file.type.startsWith('image/'));
+  if(images.length){event.preventDefault();addImages(images);return}
+  if(event.target.closest('input,textarea,select,[contenteditable="true"]'))return;
+  const url=event.clipboardData?.getData('text/plain')?.trim();if(safeMediaUrl(url)){event.preventDefault();try{addEmbed(url)}catch(error){toast(error.message)}}
+});
+canvas.addEventListener('dragover',event=>{if(event.dataTransfer.types.includes('Files')){event.preventDefault();event.dataTransfer.dropEffect='copy';canvas.classList.add('drop-active')}});
+canvas.addEventListener('dragleave',event=>{if(!canvas.contains(event.relatedTarget))canvas.classList.remove('drop-active')});
+canvas.addEventListener('drop',event=>{event.preventDefault();canvas.classList.remove('drop-active');const point=new DOMPoint(event.clientX,event.clientY).matrixTransform(svg.getScreenCTM().inverse());addImages(event.dataTransfer.files,{x:Math.max(12,point.x-100),y:Math.max(12,point.y-30)})});
+async function ensureExportAssets(){
+  const cards=readSettings(source.value).media.filter(card=>card.type==='image'),assets=await Promise.all(cards.map(card=>getAsset(card.assetId)));
+  if(assets.some(asset=>!asset)){toast('画像が見つかりません。画像付きボードを読み込んでください');return false}
+  render();return true;
+}
+function downloadBoard(blob,extension){const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=($('#flowName').value||'業務フロー')+extension;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+$('#saveBoardBtn').onclick=async()=>{
+  const text=source.value,name=$('#flowName').value,theme=$('#theme').value,ids=[...new Set(readSettings(text).media.filter(card=>card.type==='image').map(card=>card.assetId))];
+  const assets=await Promise.all(ids.map(getAsset));if(assets.some(asset=>!asset))return toast('画像が見つかりません。元のボードファイルを読み込んでください');
+  const board={format:'simple-flow-board',version:1,name,theme,source:text,assets};try{validateBoard(board)}catch(error){return toast(error.message)}
+  downloadBoard(new Blob([JSON.stringify(board)],{type:'application/json'}),'.board.json');toast('画像を含むボードを保存しました');
+};
+async function importBoardFile(file){
+  if(file.size>68000000)throw new Error('ファイルが大きすぎます');const text=await file.text();
+  if(file.name.toLowerCase().endsWith('.json')||text.trimStart().startsWith('{')){
+    let value;try{value=JSON.parse(text)}catch{throw new Error('ボードファイルを読み込めませんでした')}
+    const board=validateBoard(value),assets=[];
+    for(const asset of board.assets){const img=await decodeImage(asset.dataUrl);if(img.naturalWidth*img.naturalHeight>60000000)throw new Error('画像のサイズが大きすぎます');assets.push({...asset,width:img.naturalWidth,height:img.naturalHeight})}
+    // Remap IDs so importing a board cannot overwrite images used by undo history.
+    const mapping=new Map();for(const asset of assets){const id=newMediaId('asset');mapping.set(asset.id,id);await storeAsset({...asset,id})}
+    const settings=readSettings(board.source);settings.media=settings.media.map(card=>card.type==='image'?{...card,assetId:mapping.get(card.assetId)}:card);
+    $('#flowName').value=board.name;$('#theme').value=board.theme;activeEmbedId=null;fitToView=true;commitDocument(writeSettings(board.source,settings),{selection:null,mediaSelection:null});saveDraft();toast('画像を含むボードを読み込みました');
+  }else{activeEmbedId=null;fitToView=true;commitDocument(text,{selection:null,mediaSelection:null});toast('テキストを読み込みました')}
+}
+
+setEditMode(storageGet('simple-flow-editor-mode','visual'));render();saveDraft();updateHistoryButtons();
 </script>
 </body>
 </html>
