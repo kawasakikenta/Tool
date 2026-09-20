@@ -158,6 +158,24 @@
     .form-error { color:#b84e59; font-size:12px; }
     [hidden] { display:none!important; }
     @media(max-width:760px){ body.visual-mode main { grid-template-columns:1fr; grid-template-rows:36% 64%; } .visual-editor { padding:10px; } .palette { grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:10px; } .palette .btn { font-size:10px; padding:6px; gap:3px; } .palette .icon { width:14px; } .mode-switch { padding:5px 10px; } .inspector { padding-top:10px; } .legend { display:none; } }
+
+    .sequence-mode .flow-only,.sequence-mode #inspector,.sequence-mode #inspectorEmpty,.sequence-mode .preview>.legend { display:none!important; }
+    body.sequence-mode.visual-mode main { grid-template-columns:330px minmax(0,1fr); }
+    .sequence-panel .sequence-examples { display:flex;flex-wrap:wrap;gap:6px; }
+    .sequence-panel .sequence-examples .btn { font-size:11px;min-height:32px; }
+    .sequence-panel .inspector { border-top:1px solid #e1e5ec; }
+    #seqText,#seqNotes { display:block;box-sizing:border-box;width:100%;min-height:82px;resize:vertical;margin:0 0 12px;padding:10px;border:1px solid #d9e1ee;border-radius:8px;font-family:inherit;font-size:13px;line-height:1.7;color:#26344a; }
+    .seq-notes { margin-top:16px;font-size:12px;color:#536074; }
+    .seq-notes summary { cursor:pointer;margin-bottom:8px; }
+    .seq-notes label { display:block;margin-bottom:6px; }
+    [data-seq-message],[data-seq-participant] { cursor:pointer;outline:none; }
+    .sequence-selection-ring { display:none; }
+    [data-seq-message].is-selected .sequence-selection-ring,[data-seq-message]:focus .sequence-selection-ring { display:block;opacity:1; }
+    [data-seq-participant]:focus { filter:brightness(1.2); }
+    #seqWidthBtn { display:none; }
+    .sequence-mode #seqWidthBtn { display:inline-flex; }
+    @media(max-width:1400px){.app{grid-template-rows:auto minmax(0,1fr)}header{min-height:60px;padding-top:8px;padding-bottom:8px}.actions{flex-wrap:wrap;justify-content:flex-end}header h1{white-space:nowrap}}
+    @media(max-width:760px){body.sequence-mode.visual-mode main{grid-template-columns:1fr;grid-template-rows:40% 60%}.sequence-panel .palette{grid-template-columns:repeat(4,1fr)}.sequence-mode .edge-guide>span{font-size:10px}}
   </style>
 </head>
 <body class="visual-mode">
@@ -172,6 +190,7 @@
       <button class="btn" id="saveTextBtn" data-icon="save" title="図形と設定をテキスト保存（画像データはボード保存）">TXT保存</button>
       <button class="btn" id="copyBtn" data-icon="copy" title="入力したテキストをクリップボードにコピー">コピー</button>
       <button class="btn" id="pngBtn" data-icon="image" title="高解像度のPNG画像を保存">PNG保存</button>
+      <button class="btn" id="saveHtmlBtn" data-icon="filePlus" title="ブラウザで開いて共有できるHTMLを保存">HTML保存</button>
       <button class="btn" id="downloadBtn" data-icon="download" title="拡大してもきれいなSVG画像を保存">SVG保存</button>
     </div>
   </header>
@@ -180,8 +199,30 @@
       <div class="panel-head"><h2>編集パネル</h2><button class="help-btn" id="helpBtn" data-icon="help" aria-expanded="false" aria-controls="examples" title="書き方とサンプルを見る">使い方</button></div>
       <div class="mode-switch" role="group" aria-label="編集方法"><button id="visualModeBtn" aria-pressed="true">図で編集</button><button id="textModeBtn" aria-pressed="false">テキスト</button></div>
       <div class="visual-editor">
-        <h3>図形を追加</h3>
-        <div class="palette"><button class="btn" data-add="process" data-icon="process">処理</button><button class="btn" data-add="decision" data-icon="decision">判断</button><button class="btn" data-add="terminal" data-icon="terminal">開始・終了</button><button class="btn" id="addLaneBtn" data-icon="lanes">担当</button><button class="btn" id="addImageBtn" data-icon="image">画像</button><button class="btn" id="addEmbedBtn" data-icon="link">リンク</button></div>
+        <section id="sequencePanel" class="sequence-panel" hidden aria-label="シーケンス図の編集">
+          <h3>やり取りを順番に並べる</h3>
+          <div class="palette"><button class="btn primary" id="seqAddBtn" data-icon="filePlus">手順を追加</button><button class="btn" id="seqPeopleBtn" data-icon="lanes">登場人物</button><button class="btn" id="seqImageBtn" data-icon="image">画像</button><button class="btn" id="seqLinkBtn" data-icon="link">リンク</button></div>
+          <div class="sequence-examples"><button class="btn" id="seqReferenceBtn">見本の47手順</button><button class="btn" id="seqFromFlowBtn">フローから再作成</button></div>
+          <p class="panel-tip">上から下へ時系列に進みます。列の見出しや矢印をクリックして編集できます。元のフロー図とは別々に編集します。</p>
+          <section class="inspector" id="seqInspector">
+            <label for="seqStepSelect">編集する手順</label><select id="seqStepSelect" aria-label="編集する手順"></select>
+            <form id="seqStepForm">
+              <label for="seqPhase">工程の区切り</label><input id="seqPhase" maxlength="100" placeholder="例：受付・登録、稟議、見積">
+              <div class="field-row"><div><label for="seqFrom">誰から</label><select id="seqFrom"></select></div><div><label for="seqTo">誰へ</label><select id="seqTo"></select></div></div>
+              <label for="seqText">やり取り・作業の内容</label><textarea id="seqText" rows="3" maxlength="1200" required placeholder="例：承認依頼を通知"></textarea>
+              <label for="seqKind">操作アイコン</label><select id="seqKind"><option value="manual">対面・電話などの作業</option><option value="form">フォーム入力</option><option value="click">ボタン操作</option><option value="appact">アプリアクション</option><option value="api">アプリ連携・ルックアップ</option><option value="mail">メール</option><option value="notify">通知</option></select>
+              <label for="seqStatus">ステータス（省略可）</label><input id="seqStatus" maxlength="120" placeholder="例：承認完了、商談中">
+              <label for="seqRoute">ルートの種類</label><select id="seqRoute"><option value="normal">通常</option><option value="reject">却下・失注（赤い破線）</option><option value="future">将来工程（点線）</option></select>
+              <button class="btn primary" type="submit" data-icon="check">手順を反映</button>
+            </form>
+            <div class="inspector-actions"><button class="btn" id="seqUpBtn">↑ 前へ</button><button class="btn" id="seqDownBtn">↓ 次へ</button></div>
+            <div class="inspector-actions"><button class="btn" id="seqDuplicateBtn" data-icon="copy">複製</button><button class="btn danger" id="seqDeleteBtn" data-icon="trash">削除</button></div>
+          </section>
+          <details class="seq-notes"><summary>補足・注記</summary><label for="seqNotes">1行ごとに注記を追加</label><textarea id="seqNotes" rows="5"></textarea><button class="btn" id="seqNotesSaveBtn">注記を反映</button></details>
+        </section>
+
+        <h3 class="flow-only">図形を追加</h3>
+        <div class="palette flow-only"><button class="btn" data-add="process" data-icon="process">処理</button><button class="btn" data-add="decision" data-icon="decision">判断</button><button class="btn" data-add="terminal" data-icon="terminal">開始・終了</button><button class="btn" id="addLaneBtn" data-icon="lanes">担当</button><button class="btn" id="addImageBtn" data-icon="image">画像</button><button class="btn" id="addEmbedBtn" data-icon="link">リンク</button></div>
         <p class="media-tip">画像は Ctrl+V またはドロップで追加。<br>枠付きカードになり、右下でサイズ変更できます。</p>
         <div class="inspector-empty" id="inspectorEmpty">図形をクリックして選択<br>ドラッグで好きな位置に移動</div>
         <section class="inspector" id="inspector" aria-label="選択した図形の編集" hidden>
@@ -210,9 +251,9 @@
           <div class="inspector-actions"><button class="btn" id="duplicateMediaBtn" data-icon="copy">複製</button><button class="btn danger" id="deleteMediaBtn" data-icon="trash">削除</button></div>
           <p class="panel-tip" id="mediaHelp">画像を含めて保存するには「ボード保存」を使います。</p>
         </section>
-        <p class="panel-tip">ドラッグで配置・ダブルクリックで文字編集。接続は始点を選んで「つなぐ」、次に終点をクリック。<br>Ctrl+Zで戻す / Ctrl+Dで複製 / Deleteで削除</p>
+        <p class="panel-tip flow-only">ドラッグで配置・ダブルクリックで文字編集。接続は始点を選んで「つなぐ」、次に終点をクリック。<br>Ctrl+Zで戻す / Ctrl+Dで複製 / Deleteで削除</p>
       </div>
-      <div class="insert-toolbar" role="group" aria-label="図形の入力補助">
+      <div class="insert-toolbar flow-only" role="group" aria-label="図形の入力補助">
         <span class="toolbar-label">ボタンで追加して、名前を書き換える</span>
         <div class="insert-buttons">
           <button class="insert-btn" data-insert="lane" data-icon="lanes" title="担当者・部署のレーンを追加">担当</button>
@@ -222,13 +263,13 @@
           <button class="insert-btn" data-insert="arrow" data-icon="arrow" title="工程をつなぐ矢印をカーソル位置に挿入">矢印</button>
         </div>
       </div>
-      <div class="guide" data-icon="info"><div><b>担当者名の下に、工程を矢印でつなぎます。</b><br><code>営業:</code> の下に <code>受付 → 内容確認 → 見積作成</code></div></div>
+      <div class="guide flow-only" data-icon="info"><div><b>担当者名の下に、工程を矢印でつなぎます。</b><br><code>営業:</code> の下に <code>受付 → 内容確認 → 見積作成</code></div></div>
       <textarea id="source" spellcheck="false" aria-label="業務フローの入力欄"></textarea>
     </section>
     <section class="preview">
       <div class="panel-head"><input class="flow-name" id="flowName" value="受注業務フロー" aria-label="フロー名"><span class="status" id="status"></span><div class="preview-tools"><select id="theme" aria-label="配色"><option value="blue">ブルー</option><option value="green">グリーン</option><option value="mono">モノクロ</option></select><button id="zoomOut" data-icon="zoomOut" title="縮小" aria-label="図を縮小"></button><span class="zoom-value" id="zoomValue">100%</span><button id="zoomIn" data-icon="zoomIn" title="拡大" aria-label="図を拡大"></button><button id="fitBtn" data-icon="fit" title="図全体を画面内に収める">全体</button></div></div>
-      <div class="display-tools"><button class="btn" id="undoBtn" data-icon="undo" title="元に戻す（Ctrl+Z）">戻す</button><button class="btn" id="redoBtn" data-icon="redo" title="やり直す（Ctrl+Shift+Z）">やり直す</button><label for="orientation">向き <select id="orientation" aria-label="図の向き"><option value="horizontal">横方向 →</option><option value="vertical">縦方向 ↓</option></select></label><label for="longLinks">遠い線 <select id="longLinks"><option value="line">線で表示</option><option value="auto">番号で自動省略</option></select></label><button class="btn" id="arrangeBtn" data-icon="fit">自動整列</button><label><input id="snapGrid" type="checkbox" checked>グリッド</label></div>
-      <div class="edge-guide"><span id="interactionHint" role="status">図形を選んで編集。ドラッグで移動できます</span><div class="edit-actions"><button class="btn" id="cancelConnectBtn" hidden>接続をキャンセル</button><button class="btn" id="editTextBtn" data-icon="text">文字を編集</button><button class="btn" id="editEdgeBtn" data-icon="editLine" title="編集する接続線を選ぶ">線を編集</button></div></div>
+      <div class="display-tools"><button class="btn" id="undoBtn" data-icon="undo" title="元に戻す（Ctrl+Z）">戻す</button><button class="btn" id="redoBtn" data-icon="redo" title="やり直す（Ctrl+Shift+Z）">やり直す</button><label for="diagramType">形式 <select id="diagramType" aria-label="図の形式"><option value="flow">フロー図</option><option value="sequence">シーケンス図</option></select></label><button class="btn" id="seqWidthBtn" title="横幅に合わせて、縦にスクロールして読む">幅に合わせる</button><label class="flow-only" for="orientation">向き <select id="orientation" aria-label="図の向き"><option value="horizontal">横方向 →</option><option value="vertical">縦方向 ↓</option></select></label><label class="flow-only" for="longLinks">遠い線 <select id="longLinks"><option value="line">線で表示</option><option value="auto">番号で自動省略</option></select></label><button class="btn flow-only" id="arrangeBtn" data-icon="fit">自動整列</button><label><input id="snapGrid" type="checkbox" checked>グリッド</label></div>
+      <div class="edge-guide"><span id="interactionHint" role="status">図形を選んで編集。ドラッグで移動できます</span><div class="edit-actions"><button class="btn" id="cancelConnectBtn" hidden>接続をキャンセル</button><button class="btn flow-only" id="editTextBtn" data-icon="text">文字を編集</button><button class="btn flow-only" id="editEdgeBtn" data-icon="editLine" title="編集する接続線を選ぶ">線を編集</button></div></div>
       <div class="canvas"><svg id="diagram" xmlns="http://www.w3.org/2000/svg" aria-label="業務フロー図"></svg></div>
       <div class="empty" id="empty"><div><b>「処理」「判断」から図形を追加</b>ドラッグして並べ、図形同士をつなげます</div></div>
       <div class="examples" id="examples" role="region" aria-label="書き方とサンプル">
@@ -250,7 +291,20 @@
       <div class="legend"><span><i class="terminal"></i>開始・終了</span><span><i></i>処理</span><span><i class="decision"></i>判断</span></div>
     </section>
   </main>
-</div><input type="file" id="fileInput" accept=".txt,.json,text/plain,application/json" hidden><input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" multiple hidden><div class="toast" id="toast" role="status"></div>
+</div><input type="file" id="fileInput" accept=".txt,.json,.html,.htm,text/plain,application/json,text/html" hidden><input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" multiple hidden><div class="toast" id="toast" role="status"></div>
+<dialog class="edge-dialog" id="seqPeopleDialog" aria-labelledby="seqPeopleTitle">
+  <div class="dialog-heading"><h2 id="seqPeopleTitle">登場人物・アプリ</h2><button type="button" id="seqPeopleClose" data-icon="close" aria-label="登場人物の編集を閉じる"></button></div>
+  <label for="seqPersonSelect">編集する列</label><select id="seqPersonSelect"></select>
+  <form id="seqPersonForm" class="edge-section">
+    <label for="seqPersonName">名前</label><input id="seqPersonName" maxlength="100" required>
+    <label for="seqPersonSub">補足（省略可）</label><input id="seqPersonSub" maxlength="200" placeholder="例：kintone / 520、上席・部長・社長">
+    <div class="edge-fields"><div><label for="seqPersonIcon">アイコン</label><select id="seqPersonIcon"><option value="person">人物</option><option value="monitor">アプリ・システム</option><option value="db">マスタ・データベース</option></select></div><div><label for="seqPersonColor">列の色</label><input id="seqPersonColor" type="color" value="#356ae6"></div></div>
+    <div class="form-actions"><button class="btn primary" type="submit">列を反映</button></div>
+  </form>
+  <div class="inspector-actions"><button class="btn" id="seqPersonLeft">← 左へ</button><button class="btn" id="seqPersonRight">右へ →</button><button class="btn" id="seqPersonAdd">列を追加</button><button class="btn danger" id="seqPersonDelete">列を削除</button></div>
+  <p>使われている列は、手順の「誰から」「誰へ」を変更すると削除できます。</p><p id="seqPersonError" class="form-error" role="alert" hidden></p>
+</dialog>
+
 <dialog class="edge-dialog" id="embedDialog" aria-labelledby="embedDialogTitle">
   <div class="dialog-heading"><h2 id="embedDialogTitle">リンク・埋め込みを追加</h2><button id="closeEmbedDialog" type="button" data-icon="close" aria-label="リンクの追加を閉じる"></button></div>
   <form id="embedForm"><label for="embedUrl">URL</label><input id="embedUrl" type="url" placeholder="https://…" required autocomplete="off"><label for="embedTitle">タイトル（省略可）</label><input id="embedTitle" maxlength="100" autocomplete="off"><p>まずリンクカードを置きます。「埋め込みを表示」を押すと、ボード内で開きます。サイト側の制限で表示できない場合は、リンクから開けます。</p><p id="embedError" class="form-error" role="alert" hidden></p><div class="form-actions"><button class="btn primary" type="submit" data-icon="filePlus">カードを追加</button></div></form>
@@ -342,14 +396,15 @@ source.setSelectionRange(source.value.length,source.value.length);
 
 function updateHistoryButtons(){$('#undoBtn').disabled=!undoStack.length;$('#redoBtn').disabled=!redoStack.length}
 function commitDocument(next,options={}){
-  if(next===currentDocument){if(Object.hasOwn(options,'selection')){selectedNodeId=options.selection;selectedMediaId=null}if(Object.hasOwn(options,'mediaSelection'))selectedMediaId=options.mediaSelection;syncSelection();return false}
-  const now=Date.now();if(!(options.typing&&lastChangeTyping&&now-lastTypingAt<700)){undoStack.push({text:currentDocument,selection:selectedNodeId,mediaSelection:selectedMediaId});if(undoStack.length>80)undoStack.shift()}
+  if(next===currentDocument&&(!Object.hasOwn(options,'name')||options.name===$('#flowName').value)&&(!Object.hasOwn(options,'theme')||options.theme===$('#theme').value)){if(Object.hasOwn(options,'selection')){selectedNodeId=options.selection;selectedMediaId=null}if(Object.hasOwn(options,'mediaSelection'))selectedMediaId=options.mediaSelection;syncSelection();return false}
+  const now=Date.now();if(!(options.typing&&lastChangeTyping&&now-lastTypingAt<700)){undoStack.push({text:currentDocument,selection:selectedNodeId,mediaSelection:selectedMediaId,name:$('#flowName').value,theme:$('#theme').value});if(undoStack.length>80)undoStack.shift()}
   redoStack.length=0;lastTypingAt=now;lastChangeTyping=!!options.typing;currentDocument=next;if(source.value!==next)source.value=next;
   if(Object.hasOwn(options,'selection')){selectedNodeId=options.selection;selectedMediaId=null}if(Object.hasOwn(options,'mediaSelection'))selectedMediaId=options.mediaSelection;
+  if(Object.hasOwn(options,'name'))$('#flowName').value=options.name;if(Object.hasOwn(options,'theme'))$('#theme').value=options.theme;
   render();saveDraft();updateHistoryButtons();return true;
 }
 function restoreHistory(from,to){
-  if(!from.length)return;cancelConnection();to.push({text:currentDocument,selection:selectedNodeId,mediaSelection:selectedMediaId});const item=from.pop();currentDocument=item.text;source.value=item.text;selectedNodeId=item.selection;selectedMediaId=item.mediaSelection||null;activeEmbedId=null;lastChangeTyping=false;render();saveDraft();updateHistoryButtons();
+  if(!from.length)return;cancelConnection();to.push({text:currentDocument,selection:selectedNodeId,mediaSelection:selectedMediaId,name:$('#flowName').value,theme:$('#theme').value});const item=from.pop();currentDocument=item.text;source.value=item.text;if(item.name!==undefined)$('#flowName').value=item.name;if(item.theme!==undefined)$('#theme').value=item.theme;selectedNodeId=item.selection;selectedMediaId=item.mediaSelection||null;activeEmbedId=null;lastChangeTyping=false;render();saveDraft();updateHistoryButtons();
 }
 function insertText(text,start,end,offset=text.length,length=0){
   const next=source.value.slice(0,start)+text+source.value.slice(end);commitDocument(next);
@@ -389,6 +444,657 @@ function escapeHtml(value=''){const el=document.createElement('div');el.textCont
 function escapeAttr(value=''){return escapeHtml(value).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function svgText(label,x,y,maxChars=12){const chars=[...label],lines=[];for(let i=0;i<chars.length;i+=maxChars)lines.push(chars.slice(i,i+maxChars).join(''));const start=y-(lines.length-1)*8;return`<text x="${x}" y="${start}" text-anchor="middle" font-size="13" font-weight="700" fill="#26344a">${lines.map((line,index)=>`<tspan x="${x}" dy="${index?16:0}">${escapeHtml(line)}</tspan>`).join('')}</text>`}
 // BEGIN FLOW MODEL
+// BEGIN SEQUENCE MODEL
+
+// Pure, bounded data model for the sequence-diagram view.  The same block is
+// copied into index.html by the application build; keep it free of DOM APIs.
+
+const SEQ_MAX_PARTICIPANTS = 40;
+const SEQ_MAX_MESSAGES = 500;
+const SEQ_MAX_NOTES = 100;
+const SEQ_MAX_ID_LENGTH = 32;
+const SEQ_MAX_NAME_LENGTH = 160;
+const SEQ_MAX_SUB_LENGTH = 240;
+const SEQ_MAX_PHASE_LENGTH = 120;
+const SEQ_MAX_TEXT_LENGTH = 1200;
+const SEQ_MAX_STATUS_LENGTH = 160;
+const SEQ_MAX_NOTE_LENGTH = 1200;
+const SEQ_MAX_LITERAL_LENGTH = 500000;
+const SEQ_LITERAL_NODE_LIMIT = 12000;
+
+const SEQ_ICONS = new Set(['person', 'monitor', 'db']);
+const SEQ_KINDS = new Set(['manual', 'form', 'click', 'api', 'appact', 'mail', 'notify']);
+const SEQ_ROUTES = new Set(['normal', 'reject', 'future']);
+const SEQ_ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/;
+const SEQ_COLOR_RE = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
+const SEQ_COLORS = ['#39485a', '#4e4a63', '#185fa5', '#0f6e56', '#993c1d', '#7a6a3e', '#3e6fb8', '#7a8794'];
+
+function seqOwn(value, key) {
+  return value !== null && (typeof value === 'object' || typeof value === 'function') && Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function seqRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function seqCut(value, limit) {
+  if (value.length <= limit) return value;
+  return value.slice(0, limit);
+}
+
+function seqString(value, limit, trim) {
+  if (typeof value !== 'string') return null;
+  const result = seqCut(value, limit);
+  return trim ? result.trim() : result;
+}
+
+function seqId(value) {
+  return typeof value === 'string' && value.length <= SEQ_MAX_ID_LENGTH && SEQ_ID_RE.test(value) ? value : null;
+}
+
+function seqColor(value, fallback) {
+  if (typeof value === 'string') {
+    const color = value.trim().toLowerCase();
+    if (SEQ_COLOR_RE.test(color)) return color;
+  }
+  return SEQ_COLORS[fallback % SEQ_COLORS.length];
+}
+
+function seqEnum(value, allowed, fallback) {
+  return typeof value === 'string' && allowed.has(value) ? value : fallback;
+}
+
+function seqNextId(prefix, used, start) {
+  let number = Math.max(1, Number.isFinite(start) ? Math.floor(start) : 1);
+  let id = prefix + number;
+  while (used.has(id)) {
+    number += 1;
+    id = prefix + number;
+  }
+  used.add(id);
+  return id;
+}
+
+/**
+ * Return a fresh canonical sequence and safely discard malformed stored data.
+ * This function deliberately never mutates its argument.
+ */
+function normalizeSequence(value) {
+  const result = {participants: [], messages: [], notes: []};
+  if (!seqRecord(value)) return result;
+
+  const participants = Array.isArray(value.participants) ? value.participants : [];
+  const participantIds = new Set();
+  const participantLimit = Math.min(participants.length, SEQ_MAX_PARTICIPANTS);
+  for (let index = 0; index < participantLimit; index += 1) {
+    const item = participants[index];
+    if (!seqRecord(item)) continue;
+    const id = seqId(item.id);
+    const name = seqString(item.name, SEQ_MAX_NAME_LENGTH, true);
+    if (!id || !name || participantIds.has(id)) continue;
+    participantIds.add(id);
+    const sub = seqString(item.sub, SEQ_MAX_SUB_LENGTH, false);
+    result.participants.push({
+      id,
+      name,
+      sub: sub === null ? '' : sub,
+      icon: seqEnum(item.icon, SEQ_ICONS, 'person'),
+      color: seqColor(item.color, result.participants.length)
+    });
+  }
+
+  const messages = Array.isArray(value.messages) ? value.messages : [];
+  const messageIds = new Set();
+  const messageLimit = Math.min(messages.length, SEQ_MAX_MESSAGES);
+  for (let index = 0; index < messageLimit; index += 1) {
+    const item = messages[index];
+    if (!seqRecord(item)) continue;
+    const from = seqId(item.from);
+    const to = seqId(item.to);
+    const text = seqString(item.text, SEQ_MAX_TEXT_LENGTH, false);
+    if (!from || !to || !participantIds.has(from) || !participantIds.has(to) || text === null) continue;
+    let id = seqId(item.id);
+    if (!id || messageIds.has(id)) id = seqNextId('m', messageIds, result.messages.length + 1);
+    else messageIds.add(id);
+    const phase = seqString(item.phase, SEQ_MAX_PHASE_LENGTH, false);
+    const status = seqString(item.status, SEQ_MAX_STATUS_LENGTH, false);
+    result.messages.push({
+      id,
+      phase: phase === null ? '' : phase,
+      from,
+      to,
+      text,
+      kind: seqEnum(item.kind, SEQ_KINDS, 'manual'),
+      status: status === null ? '' : status,
+      route: seqEnum(item.route, SEQ_ROUTES, 'normal')
+    });
+  }
+
+  const notes = Array.isArray(value.notes) ? value.notes : [];
+  const noteLimit = Math.min(notes.length, SEQ_MAX_NOTES);
+  for (let index = 0; index < noteLimit; index += 1) {
+    const note = seqString(notes[index], SEQ_MAX_NOTE_LENGTH, false);
+    if (note !== null) result.notes.push(note);
+  }
+  return result;
+}
+
+function seqStrictError(message) {
+  throw new Error('Invalid sequence data: ' + message);
+}
+
+function seqValidateStrictSequence(value) {
+  if (!seqRecord(value)) seqStrictError('sequence must be an object');
+  if (!Array.isArray(value.participants)) seqStrictError('participants must be an array');
+  if (!Array.isArray(value.messages)) seqStrictError('messages must be an array');
+  if (!Array.isArray(value.notes)) seqStrictError('notes must be an array');
+  if (value.participants.length > SEQ_MAX_PARTICIPANTS) seqStrictError('too many participants');
+  if (value.messages.length > SEQ_MAX_MESSAGES) seqStrictError('too many messages');
+  if (value.notes.length > SEQ_MAX_NOTES) seqStrictError('too many notes');
+
+  const ids = new Set();
+  for (let index = 0; index < value.participants.length; index += 1) {
+    const item = value.participants[index];
+    if (!seqRecord(item)) seqStrictError('participant ' + index + ' must be an object');
+    const id = seqId(item.id);
+    const name = seqString(item.name, SEQ_MAX_NAME_LENGTH, true);
+    if (!id || !name || ids.has(id)) seqStrictError('invalid or duplicate participant id');
+    if (seqOwn(item, 'sub') && (typeof item.sub !== 'string' || item.sub.length > SEQ_MAX_SUB_LENGTH)) seqStrictError('invalid participant subtitle');
+    if (seqOwn(item, 'icon') && !SEQ_ICONS.has(item.icon)) seqStrictError('invalid participant icon');
+    if (seqOwn(item, 'color') && (typeof item.color !== 'string' || !SEQ_COLOR_RE.test(item.color.trim()))) seqStrictError('invalid participant color');
+    ids.add(id);
+  }
+
+  const messageIds = new Set();
+  for (let index = 0; index < value.messages.length; index += 1) {
+    const item = value.messages[index];
+    if (!seqRecord(item)) seqStrictError('message ' + index + ' must be an object');
+    const id = seqId(item.id);
+    const from = seqId(item.from);
+    const to = seqId(item.to);
+    if (!id || messageIds.has(id)) seqStrictError('invalid or duplicate message id');
+    if (!from || !to || !ids.has(from) || !ids.has(to)) seqStrictError('unknown participant reference');
+    if (typeof item.text !== 'string' || item.text.length > SEQ_MAX_TEXT_LENGTH) seqStrictError('invalid message text');
+    if (seqOwn(item, 'phase') && (typeof item.phase !== 'string' || item.phase.length > SEQ_MAX_PHASE_LENGTH)) seqStrictError('invalid message phase');
+    if (seqOwn(item, 'status') && (typeof item.status !== 'string' || item.status.length > SEQ_MAX_STATUS_LENGTH)) seqStrictError('invalid message status');
+    if (seqOwn(item, 'kind') && !SEQ_KINDS.has(item.kind)) seqStrictError('invalid message kind');
+    if (seqOwn(item, 'route') && !SEQ_ROUTES.has(item.route)) seqStrictError('invalid message route');
+    messageIds.add(id);
+  }
+
+  for (let index = 0; index < value.notes.length; index += 1) {
+    if (typeof value.notes[index] !== 'string' || value.notes[index].length > SEQ_MAX_NOTE_LENGTH) seqStrictError('invalid note');
+  }
+  return normalizeSequence(value);
+}
+
+function seqSkipLiteralSpace(source, position) {
+  let index = position;
+  while (index < source.length) {
+    if (/\s/.test(source[index])) {
+      index += 1;
+      continue;
+    }
+    if (source[index] === '/' && source[index + 1] === '/') {
+      index += 2;
+      while (index < source.length && source[index] !== '\n' && source[index] !== '\r') index += 1;
+      continue;
+    }
+    if (source[index] === '/' && source[index + 1] === '*') {
+      const close = source.indexOf('*/', index + 2);
+      if (close < 0) throw new Error('Invalid data literal: unterminated comment');
+      index = close + 2;
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
+function seqParseDataLiteral(source) {
+  if (typeof source !== 'string' || source.length > SEQ_MAX_LITERAL_LENGTH) throw new Error('Invalid data literal');
+  let position = 0;
+  let nodes = 0;
+
+  function fail(message) {
+    throw new Error('Invalid data literal at ' + position + ': ' + message);
+  }
+
+  function countNode() {
+    nodes += 1;
+    if (nodes > SEQ_LITERAL_NODE_LIMIT) fail('literal is too large');
+  }
+
+  function parseString() {
+    const quote = source[position++];
+    let value = '';
+    while (position < source.length) {
+      const character = source[position++];
+      if (character === quote) return value;
+      if (character === '\r' || character === '\n') fail('unescaped newline in string');
+      if (character !== '\\') {
+        value += character;
+        continue;
+      }
+      if (position >= source.length) fail('unterminated escape');
+      const escaped = source[position++];
+      const simple = {"'": "'", '"': '"', '\\': '\\', '/': '/', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v', '0': '\0'};
+      if (Object.prototype.hasOwnProperty.call(simple, escaped)) {
+        value += simple[escaped];
+      } else if (escaped === 'x') {
+        const hex = source.slice(position, position + 2);
+        if (!/^[0-9a-f]{2}$/i.test(hex)) fail('invalid hex escape');
+        value += String.fromCharCode(parseInt(hex, 16));
+        position += 2;
+      } else if (escaped === 'u') {
+        const hex = source.slice(position, position + 4);
+        if (!/^[0-9a-f]{4}$/i.test(hex)) fail('invalid unicode escape');
+        value += String.fromCharCode(parseInt(hex, 16));
+        position += 4;
+      } else {
+        fail('unsupported escape');
+      }
+      if (value.length > SEQ_MAX_TEXT_LENGTH * 4) fail('string is too long');
+    }
+    fail('unterminated string');
+  }
+
+  function identifier() {
+    const start = position;
+    if (!/[A-Za-z_$]/.test(source[position] || '')) fail('expected identifier');
+    position += 1;
+    while (/[A-Za-z0-9_$]/.test(source[position] || '')) position += 1;
+    return source.slice(start, position);
+  }
+
+  function value(depth) {
+    countNode();
+    if (depth > 20) fail('nesting is too deep');
+    position = seqSkipLiteralSpace(source, position);
+    const character = source[position];
+    if (character === '"' || character === "'") return parseString();
+    if (character === '[') return array(depth + 1);
+    if (character === '{') return object(depth + 1);
+    if (character === '-' || /[0-9]/.test(character || '')) {
+      const number = source.slice(position).match(/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/);
+      if (!number) fail('invalid number');
+      position += number[0].length;
+      const parsed = Number(number[0]);
+      if (!Number.isFinite(parsed)) fail('number out of range');
+      return parsed;
+    }
+    if (/[A-Za-z_$]/.test(character || '')) {
+      const word = identifier();
+      if (word === 'true') return true;
+      if (word === 'false') return false;
+      fail('only literal booleans are allowed');
+    }
+    fail('calls, functions and expressions are not allowed');
+  }
+
+  function array(depth) {
+    const result = [];
+    position += 1;
+    position = seqSkipLiteralSpace(source, position);
+    if (source[position] === ']') {
+      position += 1;
+      return result;
+    }
+    while (position < source.length) {
+      result.push(value(depth));
+      position = seqSkipLiteralSpace(source, position);
+      if (source[position] === ']') {
+        position += 1;
+        return result;
+      }
+      if (source[position] !== ',') fail('expected comma or closing bracket');
+      position += 1;
+      position = seqSkipLiteralSpace(source, position);
+      if (source[position] === ']') fail('trailing comma is not allowed');
+    }
+    fail('unterminated array');
+  }
+
+  function object(depth) {
+    const result = Object.create(null);
+    position += 1;
+    position = seqSkipLiteralSpace(source, position);
+    if (source[position] === '}') {
+      position += 1;
+      return result;
+    }
+    while (position < source.length) {
+      position = seqSkipLiteralSpace(source, position);
+      const key = source[position] === '"' || source[position] === "'" ? parseString() : identifier();
+      if (Object.prototype.hasOwnProperty.call(result, key)) fail('duplicate object key');
+      position = seqSkipLiteralSpace(source, position);
+      if (source[position] !== ':') fail('expected colon');
+      position += 1;
+      position = seqSkipLiteralSpace(source, position);
+      result[key] = value(depth);
+      position = seqSkipLiteralSpace(source, position);
+      if (source[position] === '}') {
+        position += 1;
+        return result;
+      }
+      if (source[position] !== ',') fail('expected comma or closing brace');
+      position += 1;
+      position = seqSkipLiteralSpace(source, position);
+      if (source[position] === '}') fail('trailing comma is not allowed');
+    }
+    fail('unterminated object');
+  }
+
+  position = seqSkipLiteralSpace(source, position);
+  const parsed = value(0);
+  position = seqSkipLiteralSpace(source, position);
+  if (position !== source.length) throw new Error('Invalid data literal: trailing expression is not allowed');
+  return parsed;
+}
+
+function seqFindBalancedArray(source, start) {
+  const stack = ['['];
+  let position = start + 1;
+  while (position < source.length) {
+    const character = source[position];
+    if (character === '"' || character === "'") {
+      const quote = character;
+      position += 1;
+      while (position < source.length) {
+        if (source[position] === '\\') {
+          position += 2;
+          continue;
+        }
+        if (source[position] === quote) {
+          position += 1;
+          break;
+        }
+        position += 1;
+      }
+      continue;
+    }
+    if (character === '`') throw new Error('Invalid data literal: template strings are not allowed');
+    if (character === '/' && source[position + 1] === '/') {
+      position += 2;
+      while (position < source.length && source[position] !== '\n' && source[position] !== '\r') position += 1;
+      continue;
+    }
+    if (character === '/' && source[position + 1] === '*') {
+      const close = source.indexOf('*/', position + 2);
+      if (close < 0) throw new Error('Invalid data literal: unterminated comment');
+      position = close + 2;
+      continue;
+    }
+    if (character === '[' || character === '{' || character === '(') stack.push(character);
+    else if (character === ']' || character === '}' || character === ')') {
+      const expected = character === ']' ? '[' : character === '}' ? '{' : '(';
+      if (stack[stack.length - 1] !== expected) throw new Error('Invalid data literal: mismatched bracket');
+      stack.pop();
+      if (!stack.length) return position;
+    }
+    position += 1;
+  }
+  throw new Error('Invalid data literal: unterminated array');
+}
+
+function seqFindAssignmentArray(source, name) {
+  const assignment = new RegExp('(?:var|let|const)\\s+' + name.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + '\\s*=\\s*');
+  let position = 0;
+  while (position < source.length) {
+    const character = source[position];
+    if (character === '"' || character === "'") {
+      const quote = character;
+      position += 1;
+      while (position < source.length) {
+        if (source[position] === '\\') position += 2;
+        else if (source[position++] === quote) break;
+      }
+      continue;
+    }
+    if (character === '`') {
+      position += 1;
+      while (position < source.length && source[position] !== '`') position += source[position] === '\\' ? 2 : 1;
+      position += 1;
+      continue;
+    }
+    if (character === '/' && source[position + 1] === '/') {
+      position += 2;
+      while (position < source.length && source[position] !== '\n' && source[position] !== '\r') position += 1;
+      continue;
+    }
+    if (character === '/' && source[position + 1] === '*') {
+      const close = source.indexOf('*/', position + 2);
+      if (close < 0) throw new Error('Invalid data literal: unterminated comment');
+      position = close + 2;
+      continue;
+    }
+    const match = assignment.exec(source.slice(position));
+    if (match && (position + match.index === 0 || !/[A-Za-z0-9_$]/.test(source[position + match.index - 1]))) {
+      const start = position + match.index + match[0].length;
+      if (source[start] !== '[') throw new Error('Invalid data literal: expected an array');
+      const end = seqFindBalancedArray(source, start);
+      let after = seqSkipLiteralSpace(source, end + 1);
+      if (source[after] === '.' || source[after] === '(' || source[after] === '[') throw new Error('Invalid data literal: expressions are not allowed');
+      if (source[after] === ';') after += 1;
+      return source.slice(start, end + 1);
+    }
+    position += 1;
+  }
+  throw new Error('Missing reference array ' + name);
+}
+
+function seqDecodeEntities(value) {
+  return value.replace(/&(?:amp|lt|gt|quot|apos|#39|#x[0-9a-f]+|#[0-9]+);/gi, entity => {
+    const lower = entity.toLowerCase();
+    if (lower === '&amp;') return '&';
+    if (lower === '&lt;') return '<';
+    if (lower === '&gt;') return '>';
+    if (lower === '&quot;') return '"';
+    if (lower === '&apos;' || lower === '&#39;') return "'";
+    const number = lower[2] === 'x' ? parseInt(lower.slice(3, -1), 16) : parseInt(lower.slice(2, -1), 10);
+    return Number.isFinite(number) ? String.fromCodePoint(Math.min(number, 0x10ffff)) : entity;
+  });
+}
+
+function seqHtmlText(value) {
+  return seqDecodeEntities(String(value).replace(/<!--[\s\S]*?-->/g, '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, ''));
+}
+
+function seqExtractHtmlName(source) {
+  const heading = source.match(/<h1\b[^>]*>([\s\S]*?)<\/h1\s*>/i);
+  const title = source.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/i);
+  const result = seqHtmlText(heading ? heading[1] : title ? title[1] : '').trim();
+  return seqCut(result || 'シーケンス図', SEQ_MAX_NAME_LENGTH);
+}
+
+function seqExtractNotes(source) {
+  const notesBox = source.match(/<div\b[^>]*class\s*=\s*["'][^"']*\bnotes\b[^"']*["'][^>]*>([\s\S]*?)<\/div\s*>/i);
+  if (!notesBox) return [];
+  const notes = [];
+  const paragraphs = /<p\b[^>]*>([\s\S]*?)<\/p\s*>/gi;
+  let match;
+  while ((match = paragraphs.exec(notesBox[1])) && notes.length < SEQ_MAX_NOTES) {
+    const value = seqCut(seqHtmlText(match[1]).trim(), SEQ_MAX_NOTE_LENGTH);
+    if (value) notes.push(value);
+  }
+  return notes;
+}
+
+function seqReferenceSequence(participants, rows, notes) {
+  if (!Array.isArray(participants)) seqStrictError('reference participants must be an array');
+  if (!Array.isArray(rows)) seqStrictError('reference rows must be an array');
+  if (participants.length > SEQ_MAX_PARTICIPANTS) seqStrictError('too many participants');
+  const participantIds = new Set();
+  const normalizedParticipants = participants.map((item, index) => {
+    if (!seqRecord(item)) seqStrictError('invalid reference participant');
+    const id = seqId(item.id);
+    const name = seqString(item.name, SEQ_MAX_NAME_LENGTH, true);
+    if (!id || !name || participantIds.has(id)) seqStrictError('invalid or duplicate reference participant');
+    if (seqOwn(item, 'sub') && (typeof item.sub !== 'string' || item.sub.length > SEQ_MAX_SUB_LENGTH)) seqStrictError('invalid reference subtitle');
+    if (seqOwn(item, 'icon') && !SEQ_ICONS.has(item.icon)) seqStrictError('invalid reference icon');
+    if (seqOwn(item, 'color') && (typeof item.color !== 'string' || !SEQ_COLOR_RE.test(item.color.trim()))) seqStrictError('invalid reference color');
+    participantIds.add(id);
+    return {id, name, sub: seqString(item.sub, SEQ_MAX_SUB_LENGTH, false) || '', icon: seqEnum(item.icon, SEQ_ICONS, 'person'), color: seqColor(item.color, index)};
+  });
+
+  const messages = [];
+  let phase = '';
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    if (!seqRecord(row)) seqStrictError('invalid reference row');
+    const hasMessageShape = seqOwn(row, 'n') || seqOwn(row, 'f') || seqOwn(row, 't') || seqOwn(row, 'self') || seqOwn(row, 'text');
+    if (seqOwn(row, 'phase') && !hasMessageShape) {
+      if (typeof row.phase !== 'string' || row.phase.length > SEQ_MAX_PHASE_LENGTH) seqStrictError('invalid reference phase');
+      phase = row.phase;
+      continue;
+    }
+    if (messages.length >= SEQ_MAX_MESSAGES) seqStrictError('too many reference messages');
+    if (seqOwn(row, 'n') && (!Number.isInteger(row.n) || row.n !== messages.length + 1)) seqStrictError('reference message numbers must be sequential');
+    let from;
+    let to;
+    if (seqOwn(row, 'self')) {
+      if (typeof row.self !== 'string') seqStrictError('invalid self participant');
+      from = row.self;
+      to = row.self;
+    } else {
+      from = row.f;
+      to = row.t;
+    }
+    if (!seqId(from) || !seqId(to) || !participantIds.has(from) || !participantIds.has(to)) seqStrictError('unknown participant reference');
+    if (typeof row.text !== 'string' || row.text.length > SEQ_MAX_TEXT_LENGTH) seqStrictError('invalid reference message text');
+    if (seqOwn(row, 'kind') && !SEQ_KINDS.has(row.kind)) seqStrictError('invalid reference message kind');
+    if (seqOwn(row, 'st') && (typeof row.st !== 'string' || row.st.length > SEQ_MAX_STATUS_LENGTH)) seqStrictError('invalid reference status');
+    if (seqOwn(row, 'alt') && typeof row.alt !== 'boolean') seqStrictError('invalid reference reject flag');
+    if (seqOwn(row, 'fut') && typeof row.fut !== 'boolean') seqStrictError('invalid reference future flag');
+    if (row.alt && row.fut) seqStrictError('conflicting reference route flags');
+    messages.push({
+      id: 'm' + (messages.length + 1),
+      phase,
+      from,
+      to,
+      text: row.text,
+      kind: seqEnum(row.kind, SEQ_KINDS, 'manual'),
+      status: typeof row.st === 'string' ? row.st : '',
+      route: row.fut ? 'future' : row.alt ? 'reject' : 'normal'
+    });
+  }
+  return seqValidateStrictSequence({participants: normalizedParticipants, messages, notes: Array.isArray(notes) ? notes : []});
+}
+
+function seqEmbeddedPayload(source) {
+  const match = source.match(/<script\b[^>]*\bid\s*=\s*(?:"sequence-board-data"|'sequence-board-data'|sequence-board-data)[^>]*>([\s\S]*?)<\/script\s*>/i);
+  if (!match) return null;
+  let payload;
+  try {
+    payload = JSON.parse(match[1].trim());
+  } catch (error) {
+    throw new Error('Invalid sequence-board-data JSON');
+  }
+  if (!seqRecord(payload) || payload.format !== 'simple-flow-sequence' || payload.version !== 1) seqStrictError('unsupported sequence-board-data format');
+  if (typeof payload.name !== 'string' || !payload.name.trim() || payload.name.length > SEQ_MAX_NAME_LENGTH) seqStrictError('invalid sequence-board-data name');
+  return {name: seqCut(payload.name.trim(), SEQ_MAX_NAME_LENGTH), sequence: seqValidateStrictSequence(payload.sequence)};
+}
+
+/**
+ * Import either the reference HTML (literal P/R arrays) or the app's JSON
+ * script export. No script is evaluated; all reference values go through the
+ * small literal parser above.
+ */
+function importSequenceHtml(text) {
+  if (typeof text !== 'string') throw new TypeError('HTML text must be a string');
+  const embedded = seqEmbeddedPayload(text);
+  if (embedded) return embedded;
+  const participants = seqParseDataLiteral(seqFindAssignmentArray(text, 'P'));
+  const rows = seqParseDataLiteral(seqFindAssignmentArray(text, 'R'));
+  return {name: seqExtractHtmlName(text), sequence: seqReferenceSequence(participants, rows, seqExtractNotes(text))};
+}
+
+function seqLaneIcon(lane) {
+  if (/(?:マスタ|データベース|database|\bdb\b)/i.test(lane)) return 'db';
+  if (/(?:アプリ|kintone|システム|system|server|サービス)/i.test(lane)) return 'monitor';
+  return 'person';
+}
+
+function seqGraphText(node, fallback) {
+  const text = seqString(node && node.label, SEQ_MAX_TEXT_LENGTH, false);
+  return text !== null && text.trim() ? text : fallback;
+}
+
+/** Seed a sequence from the existing flow graph without changing the graph. */
+function seedSequence(graph) {
+  const source = seqRecord(graph) ? graph : {};
+  const rawNodes = Array.isArray(source.nodes) ? source.nodes : [];
+  const nodes = [];
+  const nodeIds = new Set();
+  const nodeLimit = Math.min(rawNodes.length, SEQ_MAX_MESSAGES * 2);
+  for (let index = 0; index < nodeLimit; index += 1) {
+    const item = rawNodes[index];
+    if (!seqRecord(item) || typeof item.id !== 'string' || !item.id || nodeIds.has(item.id)) continue;
+    nodeIds.add(item.id);
+    const lane = seqString(item.lane, SEQ_MAX_NAME_LENGTH, true) || '共通';
+    nodes.push({id: item.id, label: seqGraphText(item, item.id), lane});
+  }
+
+  const lanes = [];
+  const laneIds = new Set();
+  const addLane = value => {
+    const lane = seqString(value, SEQ_MAX_NAME_LENGTH, true);
+    if (!lane || laneIds.has(lane) || lanes.length >= SEQ_MAX_PARTICIPANTS) return;
+    laneIds.add(lane);
+    lanes.push(lane);
+  };
+  if (Array.isArray(source.lanes)) {
+    const laneLimit = Math.min(source.lanes.length, SEQ_MAX_PARTICIPANTS);
+    for (let index = 0; index < laneLimit; index += 1) addLane(source.lanes[index]);
+  }
+  nodes.forEach(node => addLane(node.lane));
+  if (!lanes.length && nodes.length) addLane('共通');
+
+  const participants = lanes.map((lane, index) => ({id: 'p' + (index + 1), name: lane, sub: '', icon: seqLaneIcon(lane), color: SEQ_COLORS[index % SEQ_COLORS.length]}));
+  const participantByLane = new Map(participants.map(item => [item.name, item.id]));
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const rawEdges = Array.isArray(source.edges) ? source.edges : [];
+  const messages = [];
+  const connected = new Set();
+  const edgeLimit = Math.min(rawEdges.length, SEQ_MAX_MESSAGES);
+  const makeMessage = (fromNode, toNode, edge) => {
+    const from = participantByLane.get(fromNode.lane);
+    const to = participantByLane.get(toNode.lane);
+    if (!from || !to || messages.length >= SEQ_MAX_MESSAGES) return;
+    const fallback = toNode.label || fromNode.label || (fromNode.id + ' → ' + toNode.id);
+    const text = seqGraphText(edge, fallback);
+    messages.push({
+      id: 'm' + (messages.length + 1),
+      phase: seqString(edge && edge.phase, SEQ_MAX_PHASE_LENGTH, false) || '',
+      from,
+      to,
+      text,
+      kind: seqEnum(edge && edge.kind, SEQ_KINDS, 'manual'),
+      status: seqString(edge && (edge.status !== undefined ? edge.status : edge.st), SEQ_MAX_STATUS_LENGTH, false) || '',
+      route: seqEnum(edge && edge.route, SEQ_ROUTES, edge && edge.fut === true ? 'future' : edge && edge.alt === true ? 'reject' : 'normal')
+    });
+    connected.add(fromNode.id);
+    connected.add(toNode.id);
+  };
+  for (let index = 0; index < edgeLimit && messages.length < SEQ_MAX_MESSAGES; index += 1) {
+    const edge = rawEdges[index];
+    if (!seqRecord(edge) || typeof edge.from !== 'string' || typeof edge.to !== 'string') continue;
+    const fromNode = byId.get(edge.from);
+    const toNode = byId.get(edge.to);
+    if (!fromNode || !toNode) continue;
+    makeMessage(fromNode, toNode, edge);
+  }
+  for (const node of nodes) {
+    if (connected.has(node.id) || messages.length >= SEQ_MAX_MESSAGES) continue;
+    const participant = participantByLane.get(node.lane);
+    if (!participant) continue;
+    messages.push({id: 'm' + (messages.length + 1), phase: '', from: participant, to: participant, text: node.label || node.id, kind: 'manual', status: '', route: 'normal'});
+  }
+  return normalizeSequence({participants, messages, notes: []});
+}
+
+
+// END SEQUENCE MODEL
 function safeMediaUrl(value){
   if(typeof value!=='string'||value.length>4096)return null;
   try{const url=new URL(value.trim());return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password?url.href:null}catch{return null}
@@ -432,7 +1138,7 @@ function readSettings(text){
     const positions={};for(const direction of ['horizontal','vertical']){const p=n.positions?.[direction];if(p&&Number.isFinite(p.flow)&&Number.isFinite(p.cross))positions[direction]={flow:Math.max(20,Math.min(12000,p.flow)),cross:Math.max(20,Math.min(12000,p.cross))}}
     return {id:n.id,lane:typeof n.lane==='string'?n.lane:undefined,color:['blue','green','orange','purple','pink'].includes(n.color)?n.color:'auto',positions};
   }):[];
-  return {orientation:data.orientation==='vertical'?'vertical':'horizontal',longLinks:data.longLinks==='auto'?'auto':'line',media:normalizeMedia(data.media),connections:Array.isArray(data.connections)?data.connections.filter(e=>e&&typeof e.from==='string'&&typeof e.to==='string'&&typeof e.label==='string'&&['line','jump'].includes(e.mode)):[],nodes};
+  return {diagramType:data.diagramType==='sequence'?'sequence':'flow',sequence:normalizeSequence(data.sequence),orientation:data.orientation==='vertical'?'vertical':'horizontal',longLinks:data.longLinks==='auto'?'auto':'line',media:normalizeMedia(data.media),connections:Array.isArray(data.connections)?data.connections.filter(e=>e&&typeof e.from==='string'&&typeof e.to==='string'&&typeof e.label==='string'&&['line','jump'].includes(e.mode)):[],nodes};
 }
 function writeSettings(text,settings){
   const newline=text.includes('\r\n')?'\r\n':'\n';
@@ -701,9 +1407,601 @@ function renderEdgeLabel(label,path,color='#dbe3f1'){
   const box=edgeLabelMetrics(label),top=path.ly-box.height/2;
   return `<rect class="edge-label-bg" x="${path.lx-box.width/2}" y="${top}" width="${box.width}" height="${box.height}" rx="5" fill="#fff" stroke="${color}"/><text text-anchor="middle" font-size="12" fill="#425573">${box.lines.map((line,index)=>`<tspan x="${path.lx}" y="${top+16+index*15}">${escapeHtml(line)}</tspan>`).join('')}</text>`;
 }
+// BEGIN SEQUENCE RENDER
+'use strict';
+
+/*
+ * Pure SVG renderer for the vertical sequence view.
+ *
+ * The renderer deliberately does not read from or write to the DOM.  The
+ * caller can put the returned `markup` inside an SVG element, or use the same
+ * inner markup for an SVG export.  Input is the normalized sequence shape
+ * documented by the editor.
+ */
+
+var SEQ_FONT = "'Yu Gothic','Hiragino Sans','Noto Sans CJK JP','Meiryo',sans-serif";
+var SEQ_RENDER_ICONS = {
+  person: '<circle cx="12" cy="7.5" r="4"/><path d="M4 21c0-4.4 3.6-7.5 8-7.5s8 3.1 8 7.5z"/>',
+  monitor: '<rect x="2.5" y="4" width="19" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 20h6M12 16.5V20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6 8h8M6 11h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  db: '<ellipse cx="12" cy="6" rx="7.5" ry="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2" fill="#fff" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 7l8.5 6 8.5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" fill="#fff" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  form: '<rect x="4.5" y="3" width="15" height="18" rx="2" fill="#fff" stroke="currentColor" stroke-width="1.8"/><path d="M8 8.5h8M8 12.5h8M8 16.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  click: '<path d="M6.5 3.5l11.5 7.6-5 1.1 2.5 5-2.4 1.2-2.5-5-4.1 3.2z" fill="#fff" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  api: '<path d="M4 9h12l-3-3M20 15H8l3 3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
+  appact: '<rect x="3" y="4.5" width="11" height="15" rx="2" fill="#fff" stroke="currentColor" stroke-width="1.7"/><path d="M11 12h9M17 9l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  pencil: '<path d="M4 20l1.2-4.2L16 5l3 3L8.2 18.8z" fill="#fff" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M14 7l3 3" stroke="currentColor" stroke-width="1.7"/>'
+};
+
+var SEQ_KIND = {
+  mail: { icon: 'mail', color: '#3E6FB8', dashed: true },
+  notify: { icon: 'bell', color: '#A97613', dashed: true },
+  form: { icon: 'form', color: '#A97613' },
+  click: { icon: 'click', color: '#A97613' },
+  api: { icon: 'api', color: '#22757A' },
+  appact: { icon: 'appact', color: '#A97613' },
+  manual: { icon: 'pencil', color: '#7A8794' }
+};
+
+function seqEscape(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function seqText(value) {
+  return value == null ? '' : String(value);
+}
+
+function seqAttr(value) {
+  return seqEscape(seqText(value).replace(/[\r\n]+/g, ' '));
+}
+
+function seqNum(value, fallback) {
+  return typeof value === 'number' && isFinite(value) ? value : fallback;
+}
+
+function seqRenderColor(value, fallback) {
+  var text = seqText(value);
+  return /^#[0-9a-f]{3,8}$/i.test(text) ? text : fallback;
+}
+
+function seqMeasure(text, fontSize) {
+  var fs = seqNum(fontSize, 16);
+  var value = seqText(text);
+  var width = 0;
+  var maximum = 0;
+  var chars = Array.from(value);
+  for (var i = 0; i < chars.length; i += 1) {
+    var character = chars[i];
+    if (character === '\n') {
+      maximum = Math.max(maximum, width);
+      width = 0;
+      continue;
+    }
+    var code = character.charCodeAt(0);
+    if (character === '\t') width += fs * 1.7;
+    else if (character === ' ') width += fs * 0.34;
+    else if (code < 0x100) width += fs * 0.56;
+    else width += fs;
+  }
+  return Math.max(maximum, width);
+}
+
+function seqCharWidth(character, fontSize) {
+  var fs = seqNum(fontSize, 16);
+  if (character === '\t') return fs * 1.7;
+  if (character === ' ') return fs * 0.34;
+  return character.charCodeAt(0) < 0x100 ? fs * 0.56 : fs;
+}
+
+function seqRenderBlockWidth(lines, fontSize) {
+  var width = 0;
+  for (var i = 0; i < lines.length; i += 1) width = Math.max(width, seqMeasure(lines[i], fontSize));
+  return width;
+}
+
+function seqRenderClamp(value, minimum, maximum) {
+  if (minimum > maximum) return (minimum + maximum) / 2;
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+/* A DOM-free width approximation that works well for both Japanese and latin. */
+function seqWrap(value, maximumWidth, fontSize) {
+  var text = seqText(value).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  var maxWidth = Math.max(40, seqNum(maximumWidth, 200));
+  var fs = seqNum(fontSize, 16);
+  var sourceLines = text.split('\n');
+  var output = [];
+  for (var i = 0; i < sourceLines.length; i += 1) {
+    var source = sourceLines[i];
+    if (!source) {
+      output.push('');
+      continue;
+    }
+    var line = '';
+    var lineWidth = 0;
+    var chars = Array.from(source);
+    for (var j = 0; j < chars.length; j += 1) {
+      var character = chars[j];
+      var characterWidth = seqCharWidth(character, fs);
+      if (line && lineWidth + characterWidth > maxWidth) {
+        output.push(line.replace(/\s+$/g, ''));
+        line = '';
+        lineWidth = 0;
+        while (character === ' ' && j + 1 < chars.length) {
+          j += 1;
+          character = chars[j];
+          characterWidth = seqCharWidth(character, fs);
+        }
+      }
+      line += character;
+      lineWidth += characterWidth;
+    }
+    output.push(line.replace(/^\s+|\s+$/g, ''));
+  }
+  return output.length ? output : [''];
+}
+
+function seqLinesMarkup(x, firstBaseline, lines, anchor, fontSize, fill, weight, lineHeight, extra) {
+  var out = [];
+  var fs = seqNum(fontSize, 16);
+  var lh = seqNum(lineHeight, fs * 1.24);
+  var attrs = extra || '';
+  for (var i = 0; i < lines.length; i += 1) {
+    out.push('<text x="' + seqNum(x, 0) + '" y="' + (seqNum(firstBaseline, 0) + i * lh).toFixed(2) + '" text-anchor="' + seqAttr(anchor || 'start') + '" font-size="' + fs.toFixed(2) + '" fill="' + seqAttr(fill || '#1B2733') + '"' + (weight ? ' font-weight="' + seqAttr(weight) + '"' : '') + attrs + '>' + seqEscape(lines[i]) + '</text>');
+  }
+  return out.join('');
+}
+
+function seqTheme(theme) {
+  var key = seqText(theme).toLowerCase();
+  if (key === 'green') {
+    return {
+      ink: '#19342D', muted: '#4E7167', line: '#D7E3DF', grid: '#E4EEEA',
+      laneA: '#F8FCFA', laneB: '#F1F8F5', phaseA: '#F1F8F5', phaseB: '#EAF3F0',
+      card: '#FFFFFF', soft: '#F7FBF9', normal: '#315E52', mail: '#617B71',
+      reject: '#B4534B', future: '#818A85', accent: '#3E806B', statusFill: '#EFF9E9',
+      statusStroke: '#C7E4BA', statusText: '#426A35', ring: '#438D76'
+    };
+  }
+  if (key === 'mono' || key === 'monochrome' || key === 'gray' || key === 'grey') {
+    return {
+      ink: '#20252B', muted: '#59616A', line: '#D6DADE', grid: '#E7E9EB',
+      laneA: '#FFFFFF', laneB: '#F4F5F6', phaseA: '#F3F4F5', phaseB: '#EAECED',
+      card: '#FFFFFF', soft: '#FAFAFA', normal: '#30353B', mail: '#626A72',
+      reject: '#4D535A', future: '#7C8288', accent: '#4C545C', statusFill: '#F4F5F6',
+      statusStroke: '#D7DADD', statusText: '#4F565D', ring: '#4E7C9B'
+    };
+  }
+  return {
+    ink: '#1B2733', muted: '#5B6B7A', line: '#D8DEE4', grid: '#E3E8ED',
+    laneA: '#FAFBFC', laneB: '#F4F7F9', phaseA: '#F5F7F9', phaseB: '#EDF1F4',
+    card: '#FFFFFF', soft: '#FBFCFD', normal: '#39485A', mail: '#6B7A89',
+    reject: '#B4534B', future: '#8A8880', accent: '#3E6FB8', statusFill: '#FFF6E3',
+    statusStroke: '#F0DDAE', statusText: '#8A6212', ring: '#3E6FB8'
+  };
+}
+
+function seqMarker(id, color, outline) {
+  var fill = outline ? 'none' : color;
+  return '<marker id="' + id + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="' + fill + '"' + (outline ? ' stroke="' + color + '" stroke-width="1.5"' : '') + '/></marker>';
+}
+
+function seqIcon(kind, x, y, size, color) {
+  var icon = SEQ_RENDER_ICONS[kind];
+  if (!icon) return '';
+  return '<svg x="' + seqNum(x, 0).toFixed(2) + '" y="' + seqNum(y, 0).toFixed(2) + '" width="' + seqNum(size, 20).toFixed(2) + '" height="' + seqNum(size, 20).toFixed(2) + '" viewBox="0 0 24 24" fill="currentColor" color="' + seqAttr(color) + '" aria-hidden="true">' + icon + '</svg>';
+}
+
+function seqRouteStyle(message, theme) {
+  var route = seqText(message && message.route).toLowerCase();
+  var kind = seqText(message && message.kind).toLowerCase();
+  if (route === 'reject' || route === 'rejection' || route === 'red') {
+    return { color: theme.reject, marker: 'seq-arrow-reject', dash: '6 5' };
+  }
+  if (route === 'future' || route === 'planned' || route === 'dotted') {
+    return { color: theme.future, marker: 'seq-arrow-future', dash: '2 5' };
+  }
+  if (kind === 'mail' || kind === 'notify') {
+    return { color: theme.mail, marker: 'seq-arrow-mail', dash: '6 5' };
+  }
+  return { color: theme.normal, marker: 'seq-arrow-normal', dash: '' };
+}
+
+function seqParticipantIcon(value) {
+  var key = seqText(value).toLowerCase();
+  return SEQ_RENDER_ICONS[key] ? key : 'person';
+}
+
+function seqBadge(x, y, number, color) {
+  return '<circle cx="' + seqNum(x, 0).toFixed(2) + '" cy="' + seqNum(y, 0).toFixed(2) + '" r="12.5" fill="' + seqAttr(color || '#2C3846') + '"/><text x="' + seqNum(x, 0).toFixed(2) + '" y="' + (seqNum(y, 0) + 4.8).toFixed(2) + '" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">' + seqEscape(number) + '</text>';
+}
+
+function seqStatusPill(centerX, centerY, lines, theme, maxWidth) {
+  if (!lines || !lines.length || (lines.length === 1 && !lines[0])) return '';
+  var width = 0;
+  for (var i = 0; i < lines.length; i += 1) width = Math.max(width, seqMeasure(lines[i], 12));
+  var boxWidth = Math.min(seqNum(maxWidth, 340), Math.max(82, width + 24));
+  var lineHeight = 15;
+  var boxHeight = lines.length * lineHeight + 9;
+  var x = seqNum(centerX, 0) - boxWidth / 2;
+  var y = seqNum(centerY, 0) - boxHeight / 2;
+  var out = '<g class="sequence-status" aria-label="' + seqAttr(lines.join('')) + '"><rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + boxWidth.toFixed(2) + '" height="' + boxHeight.toFixed(2) + '" rx="' + Math.min(12, boxHeight / 2).toFixed(2) + '" fill="' + theme.statusFill + '" stroke="' + theme.statusStroke + '"/>';
+  for (var j = 0; j < lines.length; j += 1) {
+    out += '<text x="' + seqNum(centerX, 0).toFixed(2) + '" y="' + (y + 15 + j * lineHeight).toFixed(2) + '" text-anchor="middle" font-size="12" fill="' + theme.statusText + '">' + seqEscape(lines[j]) + '</text>';
+  }
+  return out + '</g>';
+}
+
+function seqLegendIcon(kind, color) {
+  return seqIcon(kind, 0, 0, 22, color);
+}
+
+function seqRenderLegend(startY, width, theme) {
+  var entries = [
+    { line: 'normal', label: '操作・データ送信' },
+    { line: 'mail', label: 'メール・通知' },
+    { line: 'reject', label: '却下・失注ルート' },
+    { line: 'future', label: '将来工程（検討中）' },
+    { icon: 'mail', color: '#3E6FB8', label: 'メール' },
+    { icon: 'bell', color: '#A97613', label: 'kintone通知' },
+    { icon: 'click', color: '#A97613', label: 'ボタン操作' },
+    { icon: 'appact', color: '#A97613', label: 'アプリアクション' },
+    { icon: 'form', color: '#A97613', label: 'フォーム入力' },
+    { icon: 'api', color: '#22757A', label: 'アプリ間連携' },
+    { icon: 'pencil', color: '#7A8794', label: '対面・電話など' },
+    { pill: true, label: 'ステータス・進捗' }
+  ];
+  var outerX = 12;
+  var outerW = Math.max(0, width - 24);
+  var gap = 18;
+  var columns = 2;
+  var itemW = (outerW - 32 - gap) / columns;
+  var rows = Math.ceil(entries.length / columns);
+  var itemH = 34;
+  var height = 44 + rows * itemH + 14;
+  var out = [];
+  out.push('<g class="sequence-legend" aria-label="凡例">');
+  out.push('<rect x="' + outerX + '" y="' + startY + '" width="' + outerW.toFixed(2) + '" height="' + height.toFixed(2) + '" rx="10" fill="' + theme.soft + '" stroke="' + theme.line + '"/>');
+  out.push('<text x="28" y="' + (startY + 27).toFixed(2) + '" font-size="14" font-weight="700" letter-spacing="1.2" fill="' + theme.muted + '">凡例</text>');
+  for (var i = 0; i < entries.length; i += 1) {
+    var entry = entries[i];
+    var column = i % columns;
+    var row = Math.floor(i / columns);
+    var x = outerX + 16 + column * (itemW + gap);
+    var y = startY + 50 + row * itemH;
+    out.push('<g class="sequence-legend-item">');
+    if (entry.line) {
+      var lineColor = entry.line === 'reject' ? theme.reject : entry.line === 'future' ? theme.future : entry.line === 'mail' ? theme.mail : theme.normal;
+      var dash = entry.line === 'future' ? '2 5' : entry.line === 'normal' ? '' : '6 5';
+      out.push('<line x1="' + x + '" y1="' + (y - 4) + '" x2="' + (x + 40) + '" y2="' + (y - 4) + '" stroke="' + lineColor + '" stroke-width="2"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/>');
+      out.push('<text x="' + (x + 52) + '" y="' + y + '" font-size="12" fill="' + theme.ink + '">' + seqEscape(entry.label) + '</text>');
+    } else if (entry.pill) {
+      out.push('<rect x="' + x + '" y="' + (y - 16) + '" width="86" height="22" rx="11" fill="' + theme.statusFill + '" stroke="' + theme.statusStroke + '"/>');
+      out.push('<text x="' + (x + 43) + '" y="' + (y - 1) + '" text-anchor="middle" font-size="11" fill="' + theme.statusText + '">ステータス：…</text>');
+      out.push('<text x="' + (x + 98) + '" y="' + y + '" font-size="12" fill="' + theme.ink + '">' + seqEscape(entry.label) + '</text>');
+    } else {
+      out.push('<circle cx="' + (x + 11) + '" cy="' + (y - 4) + '" r="13" fill="#fff" stroke="' + seqAttr(entry.color) + '" stroke-width="1.4"/>');
+      out.push(seqIcon(entry.icon, x + 1, y - 14, 24, entry.color));
+      out.push('<text x="' + (x + 32) + '" y="' + y + '" font-size="12" fill="' + theme.ink + '">' + seqEscape(entry.label) + '</text>');
+    }
+    out.push('</g>');
+  }
+  out.push('</g>');
+  return { markup: out.join(''), height: height };
+}
+
+function seqRenderNotes(startY, width, notes, theme) {
+  if (!notes.length) return { markup: '', height: 0 };
+  var out = ['<g class="sequence-notes">'];
+  var y = startY + 14;
+  var maxWidth = Math.max(160, width - 48);
+  for (var i = 0; i < notes.length; i += 1) {
+    var lines = seqWrap(notes[i], maxWidth - 18, 12);
+    out.push('<circle cx="20" cy="' + (y - 4).toFixed(2) + '" r="3" fill="' + theme.muted + '"/>');
+    out.push(seqLinesMarkup(30, y, lines, 'start', 12, theme.muted, '', 16));
+    y += Math.max(18, lines.length * 16 + 4);
+  }
+  out.push('</g>');
+  return { markup: out.join(''), height: y - startY + 4 };
+}
+
+function renderSequenceDiagram(sequence, themeName) {
+  var source = sequence && typeof sequence === 'object' ? sequence : {};
+  var participants = Array.isArray(source.participants) ? source.participants : [];
+  var messages = Array.isArray(source.messages) ? source.messages : [];
+  var rawNotes = Array.isArray(source.notes) ? source.notes : [];
+  var notes = [];
+  for (var ni = 0; ni < rawNotes.length; ni += 1) {
+    var note = seqText(rawNotes[ni]);
+    if (note) notes.push(note);
+  }
+  var theme = seqTheme(themeName);
+  var left = 150;
+  var right = 28;
+  var laneWidth = 200;
+  var laneCount = participants.length;
+  var laneAreaWidth = laneCount ? laneWidth * laneCount : 0;
+  var width = Math.max(900, left + right + laneAreaWidth || 900);
+  var laneAreaRight = laneCount ? left + laneAreaWidth : width - right;
+  var headerY = 18;
+  var participantData = [];
+  var participantById = Object.create(null);
+  var fallbackHeaderColor = ['#185FA5', '#0F6E56', '#993C1D', '#4E4A63', '#7A6A3E'];
+  var headerMax = 0;
+
+  for (var pi = 0; pi < participants.length; pi += 1) {
+    var participant = participants[pi] && typeof participants[pi] === 'object' ? participants[pi] : {};
+    var pid = seqText(participant.id) || 'participant-' + (pi + 1);
+    var pname = seqText(participant.name) || pid;
+    var psub = seqText(participant.sub);
+    var nameLines = seqWrap(pname, laneWidth - 22, 17);
+    var subLines = psub ? seqWrap(psub, laneWidth - 22, 12) : [];
+    var header = {
+      id: pid,
+      name: pname,
+      sub: psub,
+      icon: seqParticipantIcon(participant.icon),
+      color: seqRenderColor(participant.color, fallbackHeaderColor[pi % fallbackHeaderColor.length]),
+      nameLines: nameLines,
+      subLines: subLines,
+      x: left + pi * laneWidth,
+      centerX: left + pi * laneWidth + laneWidth / 2
+    };
+    participantData.push(header);
+    if (participantById[pid] == null) participantById[pid] = header;
+    headerMax = Math.max(headerMax, 58 + nameLines.length * 19 + subLines.length * 15);
+  }
+  var headerHeight = Math.max(100, headerMax || 100);
+  var top = headerY + headerHeight + 20;
+  var messageAreaWidth = Math.max(120, laneAreaRight - left - 24);
+  var rowData = [];
+  var phaseData = [];
+  var currentPhase = null;
+  var y = top;
+  var phaseStart = 0;
+
+  function centerFor(id) {
+    var found = participantById[seqText(id)];
+    if (found) return found.centerX;
+    if (laneCount) return participantData[0].centerX;
+    return left + (width - left - right) / 2;
+  }
+
+  function finishPhase(endY) {
+    if (currentPhase) {
+      currentPhase.y = phaseStart;
+      currentPhase.height = Math.max(0, endY - phaseStart);
+      currentPhase.endIndex = rowData.length;
+      phaseData.push(currentPhase);
+    }
+  }
+
+  for (var mi = 0; mi < messages.length; mi += 1) {
+    var message = messages[mi] && typeof messages[mi] === 'object' ? messages[mi] : {};
+    var phase = seqText(message.phase);
+    if (!currentPhase || currentPhase.label !== phase) {
+      finishPhase(y);
+      currentPhase = { label: phase, index: phaseData.length, startIndex: rowData.length };
+      phaseStart = y;
+    }
+    var messageId = seqText(message.id) || 'message-' + (mi + 1);
+    var text = seqText(message.text);
+    var textLines = seqWrap(text, messageAreaWidth, 15);
+    var status = seqText(message.status);
+    var statusText = status ? 'ステータス：' + status : '';
+    var statusLines = statusText ? seqWrap(statusText, Math.min(360, messageAreaWidth - 12), 12) : [];
+    var from = seqText(message.from);
+    var to = seqText(message.to);
+    var x1 = centerFor(from);
+    var x2 = centerFor(to);
+    var self = from !== '' && from === to;
+    var labelWidth = Math.min(messageAreaWidth, seqRenderBlockWidth(textLines, 15));
+    var labelDesiredCenter = (x1 + x2) / 2;
+    var selfDirection = x1 + 74 <= laneAreaRight ? 1 : -1;
+    if (self) labelDesiredCenter = x1 + selfDirection * (42 + 12 + labelWidth / 2);
+    var labelCenter = seqRenderClamp(labelDesiredCenter, left + 12 + labelWidth / 2, laneAreaRight - 12 - labelWidth / 2);
+    var statusWidth = statusLines.length ? Math.min(Math.max(82, messageAreaWidth - 12), Math.max(82, seqRenderBlockWidth(statusLines, 12) + 24)) : 0;
+    var statusDesiredCenter = labelDesiredCenter;
+    var statusCenter = statusLines.length ? seqRenderClamp(statusDesiredCenter, left + 12 + statusWidth / 2, laneAreaRight - 12 - statusWidth / 2) : labelCenter;
+    var labelHeight = Math.max(1, textLines.length) * 19;
+    var statusHeight = statusLines.length ? statusLines.length * 15 + 10 : 0;
+    var arrowRel = 14 + labelHeight + (statusHeight ? statusHeight + 8 : 9);
+    var rowHeight = Math.max(72, arrowRel + 28);
+    rowData.push({
+      id: messageId,
+      message: message,
+      index: mi,
+      y: y,
+      height: rowHeight,
+      phase: phase,
+      text: text,
+      textLines: textLines,
+      statusLines: statusLines,
+      from: from,
+      to: to,
+      self: self,
+      x1: x1,
+      x2: x2,
+      selfDirection: selfDirection,
+      labelCenter: labelCenter,
+      statusCenter: statusCenter,
+      statusWidth: statusWidth,
+      arrowRel: arrowRel,
+      arrowY: y + arrowRel,
+      statusRel: 14 + labelHeight + statusHeight / 2 + 3,
+      statusCenterY: y + 14 + labelHeight + statusHeight / 2 + 3,
+      route: seqRouteStyle(message, theme)
+    });
+    y += rowHeight;
+  }
+  finishPhase(y);
+  /*
+   * A phase title lives in the left band.  A short phase with a wrapped title
+   * needs more vertical room than its message row may naturally require, so
+   * grow its final row before rebuilding absolute coordinates.  This keeps
+   * phase text inside the band and moves every following row together.
+   */
+  for (var pmi = 0; pmi < phaseData.length; pmi += 1) {
+    var phaseMeasure = phaseData[pmi];
+    var phaseTitleLines = seqWrap(phaseMeasure.label, left - 20, 14);
+    var phaseMinimum = phaseMeasure.label ? phaseTitleLines.length * 18 + 16 : 0;
+    if (phaseMinimum > phaseMeasure.height && phaseMeasure.endIndex > phaseMeasure.startIndex) {
+      rowData[phaseMeasure.endIndex - 1].height += phaseMinimum - phaseMeasure.height;
+    }
+  }
+  y = top;
+  for (var rmi = 0; rmi < rowData.length; rmi += 1) {
+    rowData[rmi].y = y;
+    rowData[rmi].arrowY = y + rowData[rmi].arrowRel;
+    rowData[rmi].statusCenterY = y + rowData[rmi].statusRel;
+    y += rowData[rmi].height;
+  }
+  for (var pyi = 0; pyi < phaseData.length; pyi += 1) {
+    var phaseGeometry = phaseData[pyi];
+    if (phaseGeometry.startIndex < rowData.length) {
+      phaseGeometry.y = rowData[phaseGeometry.startIndex].y;
+      var lastPhaseRow = rowData[phaseGeometry.endIndex - 1];
+      phaseGeometry.height = lastPhaseRow.y + lastPhaseRow.height - phaseGeometry.y;
+    }
+  }
+  var rowBottom = y;
+
+  var legendY = rowBottom + 28;
+  var legend = seqRenderLegend(legendY, width, theme);
+  var notesY = legendY + legend.height + (notes.length ? 14 : 0);
+  var renderedNotes = seqRenderNotes(notesY, width, notes, theme);
+  var height = notesY + renderedNotes.height + (notes.length ? 16 : 18);
+
+  var out = [];
+  out.push('<defs>');
+  out.push(seqMarker('seq-arrow-normal', theme.normal, false));
+  out.push(seqMarker('seq-arrow-mail', theme.mail, true));
+  out.push(seqMarker('seq-arrow-reject', theme.reject, false));
+  out.push(seqMarker('seq-arrow-future', theme.future, true));
+  out.push('</defs>');
+  out.push('<g class="sequence-diagram" style="font-family:' + seqAttr(SEQ_FONT) + ';font-size:15px;color:' + theme.ink + ';" data-sequence-theme="' + seqAttr(themeName || 'blue') + '">');
+  out.push('<rect x="0" y="0" width="' + width.toFixed(2) + '" height="' + height.toFixed(2) + '" fill="' + theme.card + '"/>');
+
+  if (laneCount) {
+    for (var li = 0; li < laneCount; li += 1) {
+      var laneX = left + li * laneWidth;
+      out.push('<rect x="' + laneX.toFixed(2) + '" y="' + top.toFixed(2) + '" width="' + laneWidth.toFixed(2) + '" height="' + Math.max(0, rowBottom - top).toFixed(2) + '" fill="' + (li % 2 ? theme.laneB : theme.laneA) + '"/>');
+    }
+  }
+
+  for (var ph = 0; ph < phaseData.length; ph += 1) {
+    var phaseBand = phaseData[ph];
+    out.push('<rect class="sequence-phase-band" x="0" y="' + phaseBand.y.toFixed(2) + '" width="' + left.toFixed(2) + '" height="' + phaseBand.height.toFixed(2) + '" fill="' + (ph % 2 ? theme.phaseB : theme.phaseA) + '" stroke="' + theme.grid + '"/>');
+    var phaseLines = seqWrap(phaseBand.label, left - 20, 14);
+    if (phaseBand.label) {
+      var phaseLineHeight = 18;
+      var phaseFirst = phaseBand.y + phaseBand.height / 2 - ((phaseLines.length - 1) * phaseLineHeight) / 2 + 5;
+      out.push(seqLinesMarkup(left / 2, phaseFirst, phaseLines, 'middle', 14, theme.muted, '700', phaseLineHeight));
+    }
+    out.push('<line x1="0" y1="' + phaseBand.y.toFixed(2) + '" x2="' + laneAreaRight.toFixed(2) + '" y2="' + phaseBand.y.toFixed(2) + '" stroke="' + theme.line + '" stroke-width="1"/>');
+  }
+  out.push('<line x1="0" y1="' + rowBottom.toFixed(2) + '" x2="' + laneAreaRight.toFixed(2) + '" y2="' + rowBottom.toFixed(2) + '" stroke="' + theme.line + '" stroke-width="1"/>');
+  out.push('<line x1="' + left.toFixed(2) + '" y1="' + top.toFixed(2) + '" x2="' + left.toFixed(2) + '" y2="' + rowBottom.toFixed(2) + '" stroke="' + theme.line + '" stroke-width="1"/>');
+  if (laneCount) {
+    for (var gl = 1; gl < laneCount; gl += 1) {
+      var gridX = left + gl * laneWidth;
+      out.push('<line x1="' + gridX.toFixed(2) + '" y1="' + top.toFixed(2) + '" x2="' + gridX.toFixed(2) + '" y2="' + rowBottom.toFixed(2) + '" stroke="' + theme.grid + '" stroke-width="1"/>');
+    }
+    out.push('<line x1="' + laneAreaRight.toFixed(2) + '" y1="' + top.toFixed(2) + '" x2="' + laneAreaRight.toFixed(2) + '" y2="' + rowBottom.toFixed(2) + '" stroke="' + theme.grid + '" stroke-width="1"/>');
+    for (var ll = 0; ll < laneCount; ll += 1) {
+      var lifeX = participantData[ll].centerX;
+      out.push('<line x1="' + lifeX.toFixed(2) + '" y1="' + (headerY + headerHeight).toFixed(2) + '" x2="' + lifeX.toFixed(2) + '" y2="' + rowBottom.toFixed(2) + '" stroke="#B8C2CC" stroke-width="1.5" stroke-dasharray="5 5"/>');
+    }
+  }
+
+  for (var hi = 0; hi < participantData.length; hi += 1) {
+    var person = participantData[hi];
+    var hx = person.x + 6;
+    var hw = laneWidth - 12;
+    out.push('<g class="sequence-participant" data-seq-participant="' + seqAttr(person.id) + '" role="button" tabindex="0" aria-label="参加者 ' + seqAttr(person.name) + '">');
+    out.push('<rect x="' + hx.toFixed(2) + '" y="' + headerY.toFixed(2) + '" width="' + hw.toFixed(2) + '" height="' + headerHeight.toFixed(2) + '" rx="10" fill="' + person.color + '"/>');
+    out.push(seqIcon(person.icon, person.centerX - 19, headerY + 9, 38, '#fff'));
+    var nameBaseline = headerY + 59;
+    out.push(seqLinesMarkup(person.centerX, nameBaseline, person.nameLines, 'middle', 17, '#fff', '700', 19));
+    if (person.subLines.length) {
+      var subBaseline = nameBaseline + person.nameLines.length * 19 + 1;
+      out.push(seqLinesMarkup(person.centerX, subBaseline, person.subLines, 'middle', 12, '#fff', '', 15, ' opacity=".9"'));
+    }
+    out.push('</g>');
+  }
+
+  var rowBounds = [];
+  for (var ri = 0; ri < rowData.length; ri += 1) {
+    var row = rowData[ri];
+    var msg = row.message;
+    var route = row.route;
+    var label = (row.index + 1) + '：' + row.text;
+    rowBounds.push({ id: row.id, x: 0, y: row.y, width: width, height: row.height });
+    out.push('<g class="sequence-row" data-seq-message="' + seqAttr(row.id) + '" role="button" tabindex="0" aria-label="' + seqAttr(label) + '">');
+    out.push('<rect class="sequence-selection-ring" data-editor-only="true" x="2" y="' + (row.y + 1).toFixed(2) + '" width="' + (width - 4).toFixed(2) + '" height="' + (row.height - 2).toFixed(2) + '" rx="7" fill="none" stroke="' + theme.ring + '" stroke-width="3" opacity="0" pointer-events="none"/>');
+    var textBaseline = row.y + 14 + 15;
+    out.push(seqLinesMarkup(row.labelCenter, textBaseline, row.textLines, 'middle', 15, theme.ink, '', 19));
+    if (row.statusLines.length) out.push(seqStatusPill(row.statusCenter, row.statusCenterY, row.statusLines, theme, row.statusWidth));
+    if (row.self) {
+      var direction = row.selfDirection;
+      var loopWidth = 42;
+      var loopHeight = 29;
+      var loopX = row.x1 + direction * loopWidth;
+      var loopY = row.arrowY - 12;
+      var path = 'M' + row.x1.toFixed(2) + ',' + row.arrowY.toFixed(2) + ' H' + loopX.toFixed(2) + ' C' + (loopX + direction * 12).toFixed(2) + ',' + loopY.toFixed(2) + ' ' + (loopX + direction * 12).toFixed(2) + ',' + (loopY - loopHeight).toFixed(2) + ' ' + loopX.toFixed(2) + ',' + (loopY - loopHeight).toFixed(2) + ' H' + (row.x1 + direction * 14).toFixed(2);
+      out.push('<path d="' + path + '" fill="none" stroke="' + route.color + '" stroke-width="2" stroke-linecap="round"' + (route.dash ? ' stroke-dasharray="' + route.dash + '"' : '') + ' marker-end="url(#' + route.marker + ')"/>');
+      out.push(seqBadge(row.x1, row.arrowY, row.index + 1, route.color));
+    } else {
+      var directionLine = row.x2 >= row.x1 ? 1 : -1;
+      var lineStart = row.x1 + directionLine * 15;
+      var lineEnd = row.x2 - directionLine * 4;
+      if (Math.abs(lineEnd - lineStart) < 12) {
+        lineStart = row.x1 - directionLine * 8;
+        lineEnd = row.x2 + directionLine * 8;
+      }
+      out.push('<line x1="' + lineStart.toFixed(2) + '" y1="' + row.arrowY.toFixed(2) + '" x2="' + lineEnd.toFixed(2) + '" y2="' + row.arrowY.toFixed(2) + '" stroke="' + route.color + '" stroke-width="2"' + (route.dash ? ' stroke-dasharray="' + route.dash + '"' : '') + ' marker-end="url(#' + route.marker + ')"/>');
+      out.push(seqBadge(row.x1, row.arrowY, row.index + 1, route.color));
+      var kind = SEQ_KIND[seqText(msg.kind).toLowerCase()];
+      if (kind) {
+        var midX = (row.x1 + row.x2) / 2;
+        out.push('<circle cx="' + midX.toFixed(2) + '" cy="' + row.arrowY.toFixed(2) + '" r="15" fill="#fff" stroke="' + kind.color + '" stroke-width="1.6"/>');
+        out.push(seqIcon(kind.icon, midX - 10, row.arrowY - 10, 20, kind.color));
+      }
+    }
+    out.push('</g>');
+  }
+
+  out.push(legend.markup);
+  out.push(renderedNotes.markup);
+  out.push('</g>');
+  var participantBounds = [];
+  for (var bi = 0; bi < participantData.length; bi += 1) {
+    participantBounds.push({ id: participantData[bi].id, x: participantData[bi].x, y: headerY, width: laneWidth, height: headerHeight });
+  }
+  return {
+    markup: out.join(''),
+    width: width,
+    height: height,
+    rowBounds: rowBounds,
+    participantBounds: participantBounds
+  };
+}
+
+if (typeof module === 'object' && module && module.exports) {
+  module.exports = { renderSequenceDiagram: renderSequenceDiagram };
+} else if (typeof globalThis !== 'undefined') {
+  globalThis.renderSequenceDiagram = renderSequenceDiagram;
+}
+
+// END SEQUENCE RENDER
 function render(graphOverride=null){
   try{
-    const graph=graphOverride||layout(parse(source.value)),theme=themes[$('#theme').value]||themes.blue;lastGraph=graph;$('#editEdgeBtn').disabled=!graph.edges.length;$('#editTextBtn').disabled=!graph.nodes.length&&!graph.laneTokens.length;$('#orientation').value=graph.settings.orientation;$('#longLinks').value=graph.settings.longLinks;$('#status').textContent=graph.nodes.length?`${graph.lanes.length}レーン・${graph.nodes.length}工程`:' ';$('#status').className='status';$('#empty').style.display=graph.nodes.length||graph.settings.media.length?'none':'grid';if(graph.settings.media.length)$('#status').textContent+=`・${graph.settings.media.length}カード`;
+    const graph=graphOverride||layout(parse(source.value)),theme=themes[$('#theme').value]||themes.blue;lastGraph=graph;if(graph.settings.diagramType==='sequence'){renderSequenceMode(graph);return}$('#editEdgeBtn').disabled=!graph.edges.length;$('#editTextBtn').disabled=!graph.nodes.length&&!graph.laneTokens.length;$('#orientation').value=graph.settings.orientation;$('#longLinks').value=graph.settings.longLinks;$('#status').textContent=graph.nodes.length?`${graph.lanes.length}レーン・${graph.nodes.length}工程`:' ';$('#status').className='status';$('#empty').style.display=graph.nodes.length||graph.settings.media.length?'none':'grid';if(graph.settings.media.length)$('#status').textContent+=`・${graph.settings.media.length}カード`;
     if($('#theme').value==='mono')graph.routes.forEach((route,index)=>{route.color='#596374';route.dash=['','7 4','2 4','9 3 2 3'][index%4]});
     svg.setAttribute('viewBox',`0 0 ${graph.width} ${graph.height}`);
     const byId=new Map(graph.nodes.map(n=>[n.id,n]));
@@ -763,7 +2061,7 @@ function syncSelection(){
   $('#inspector').hidden=!node;$('#inspectorEmpty').hidden=!!node;syncMediaInspector();
   if(node&&!dragState){$('#shapeName').value=node.label;$('#shapeType').value=node.type;$('#nodeColor').value=node.color||'auto';const select=$('#nodeLane');select.replaceChildren();lastGraph.lanes.forEach(lane=>{const option=document.createElement('option');option.value=lane;option.textContent=lane;select.appendChild(option)});select.value=node.lane;$('#inspectorError').hidden=true}
   document.body.classList.toggle('connecting',!!connectingFrom);$('#connectBtn').setAttribute('aria-pressed',String(!!connectingFrom));$('#cancelConnectBtn').hidden=!connectingFrom;
-  $('#interactionHint').textContent=connectingFrom?'接続先の図形をクリックしてください（Escでキャンセル）':'図形・画像をドラッグで移動。画像やURLは Ctrl+V で追加';
+  $('#interactionHint').textContent=connectingFrom?'接続先の図形をクリックしてください（Escでキャンセル）':'図形・画像をドラッグで移動。画像やURLは Ctrl+V で追加';syncSequenceInspector();
 }
 function selectNode(id){selectedNodeId=id;selectedMediaId=null;syncSelection()}
 function cancelConnection(){connectingFrom=null;syncSelection()}
@@ -778,8 +2076,8 @@ document.querySelectorAll('[data-add]').forEach(button=>button.onclick=()=>addFr
 $('#addLaneBtn').onclick=()=>{let number=1;while(lastGraph.lanes.includes('担当'+number))number++;const label='担当'+number;commitDocument(appendFlow(source.value,label,''));openTextEditor('lane:'+lastGraph.lanes.indexOf(label))};
 $('#inspectorForm').onsubmit=event=>{event.preventDefault();if(!selectedNodeId)return;try{const next=updateNode(source.value,lastGraph,selectedNodeId,{label:$('#shapeName').value,type:$('#shapeType').value,lane:$('#nodeLane').value,color:$('#nodeColor').value});commitDocument(next);toast('図形を更新しました')}catch(error){$('#inspectorError').textContent=error.message;$('#inspectorError').hidden=false}};
 $('#connectBtn').onclick=()=>{if(connectingFrom)return cancelConnection();connectingFrom=selectedNodeId;syncSelection()};$('#cancelConnectBtn').onclick=cancelConnection;
-function duplicateSelected(){if(selectedMediaId)return duplicateMedia();const node=lastGraph.nodes.find(n=>n.id===selectedNodeId);if(node)addFromPalette(node.type,node)}
-function deleteSelected(){if(selectedMediaId)return deleteMedia();if(!selectedNodeId)return;const next=removeFromFlow(source.value,selectedNodeId);cancelConnection();commitDocument(next,{selection:null});toast('図形と接続を削除しました。「戻す」で取り消せます')}
+function duplicateSelected(){if(selectedMediaId)return duplicateMedia();if(isSequence())return duplicateSequenceRow();const node=lastGraph.nodes.find(n=>n.id===selectedNodeId);if(node)addFromPalette(node.type,node)}
+function deleteSelected(){if(selectedMediaId)return deleteMedia();if(isSequence())return deleteSequenceRow();if(!selectedNodeId)return;const next=removeFromFlow(source.value,selectedNodeId);cancelConnection();commitDocument(next,{selection:null});toast('図形と接続を削除しました。「戻す」で取り消せます')}
 $('#duplicateBtn').onclick=duplicateSelected;$('#deleteNodeBtn').onclick=deleteSelected;
 $('#deleteEdgeBtn').onclick=()=>{if(!editingEdge)return;const next=removeFromFlow(source.value,null,editingEdge);$('#edgeDialog').close();commitDocument(next);toast('線を削除しました。「戻す」で取り消せます')};
 $('#undoBtn').onclick=()=>restoreHistory(undoStack,redoStack);$('#redoBtn').onclick=()=>restoreHistory(redoStack,undoStack);
@@ -813,6 +2111,7 @@ function finishDrag(event,cancel=false){
 document.addEventListener('pointerup',event=>finishDrag(event));document.addEventListener('pointercancel',event=>finishDrag(event,true));
 svg.addEventListener('dblclick',event=>{if(event.target.closest('foreignObject'))return;const media=event.target.closest('[data-media]');if(media){selectMedia(media.dataset.media);$('#mediaTitle').focus();$('#mediaTitle').select();return}const target=event.target.closest('[data-node]');if(target&&!connectingFrom)openTextEditor('node:'+target.dataset.node)});
 function activateDiagram(event){
+  const sequenceTarget=event.target.closest('[data-seq-message],[data-seq-participant]');if(sequenceTarget){if(event.type==='keydown'&&!['Enter',' '].includes(event.key))return;event.preventDefault();if(sequenceTarget.dataset.seqParticipant)openSequencePeople(sequenceTarget.dataset.seqParticipant);else selectSequence(sequenceTarget.dataset.seqMessage);return}
   if(event.type==='click'&&performance.now()<ignoreClickUntil)return;
   if(event.target.closest('foreignObject'))return;const target=event.target.closest('[data-edge],[data-node],[data-lane],[data-jump],[data-media]');if(!target){if(event.type==='click'){cancelConnection();selectNode(null)}return}
   if(event.type==='keydown'){if(event.key!=='Enter'&&event.key!==' ')return;event.preventDefault()}
@@ -885,11 +2184,11 @@ function exportSvg(){
   const copy=svg.cloneNode(true),view=svg.viewBox.baseVal;
   copy.setAttribute('xmlns','http://www.w3.org/2000/svg');copy.setAttribute('width',view.width);copy.setAttribute('height',view.height);copy.setAttribute('font-family','sans-serif');copy.removeAttribute('style');
   copy.querySelectorAll('[data-editor-only],title,foreignObject').forEach(el=>el.remove());
-  copy.querySelectorAll('[data-edge],[data-node],[data-lane],[data-jump],[data-media]').forEach(el=>{for(const attribute of ['data-edge','data-node','data-lane','data-jump','data-media','role','tabindex','aria-label','aria-pressed','class'])el.removeAttribute(attribute)});
+  copy.querySelectorAll('[data-edge],[data-node],[data-lane],[data-jump],[data-media],[data-seq-message],[data-seq-participant]').forEach(el=>{for(const attribute of ['data-edge','data-node','data-lane','data-jump','data-media','data-seq-message','data-seq-participant','role','tabindex','aria-label','aria-pressed','class'])el.removeAttribute(attribute)});
   return copy;
 }
 $('#downloadBtn').onclick=async()=>{if(!svg.innerHTML||!await ensureExportAssets())return;const copy=exportSvg(),blob=new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'}),a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=($('#flowName').value||'業務フロー')+'.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('画像を保存しました')};
-$('#pngBtn').onclick=async()=>{if(!svg.innerHTML||!await ensureExportAssets())return;const copy=exportSvg(),view=svg.viewBox.baseVal,scale=2;const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'})),img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=view.width*scale;canvas.height=view.height*scale;const context=canvas.getContext('2d');context.scale(scale,scale);context.fillStyle='#fff';context.fillRect(0,0,view.width,view.height);context.drawImage(img,0,0);URL.revokeObjectURL(url);canvas.toBlob(blob=>{if(!blob)return toast('PNGを作成できませんでした');const a=document.createElement('a'),pngUrl=URL.createObjectURL(blob);a.href=pngUrl;a.download=($('#flowName').value||'業務フロー')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(pngUrl),1000);toast('PNG画像を保存しました')},'image/png')};img.onerror=()=>{URL.revokeObjectURL(url);toast('PNGを作成できませんでした')};img.src=url};
+$('#pngBtn').onclick=async()=>{if(!svg.innerHTML||!await ensureExportAssets())return;const copy=exportSvg(),view=svg.viewBox.baseVal,scale=Math.min(2,16000/view.width,16000/view.height,Math.sqrt(32000000/(view.width*view.height)));const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'})),img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=view.width*scale;canvas.height=view.height*scale;const context=canvas.getContext('2d');context.scale(scale,scale);context.fillStyle='#fff';context.fillRect(0,0,view.width,view.height);context.drawImage(img,0,0);URL.revokeObjectURL(url);canvas.toBlob(blob=>{if(!blob)return toast('PNGを作成できませんでした');const a=document.createElement('a'),pngUrl=URL.createObjectURL(blob);a.href=pngUrl;a.download=($('#flowName').value||'業務フロー')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(pngUrl),1000);toast('PNG画像を保存しました')},'image/png')};img.onerror=()=>{URL.revokeObjectURL(url);toast('PNGを作成できませんでした')};img.src=url};
 document.addEventListener('keydown',event=>{
   const editing=event.target.closest('input,textarea,select,[contenteditable="true"]'),dialog=document.querySelector('dialog[open]');
   if(event.key==='Escape'&&!dialog){if(dragState){finishDrag({pointerId:dragState.pointerId},true);event.preventDefault()}cancelConnection();return}
@@ -1008,6 +2307,7 @@ $('#saveBoardBtn').onclick=async()=>{
 };
 async function importBoardFile(file){
   if(file.size>68000000)throw new Error('ファイルが大きすぎます');const text=await file.text();
+  if(/\.html?$/i.test(file.name)||/^\s*<!doctype html|^\s*<html/i.test(text)){loadSequenceHtml(text);return}
   if(file.name.toLowerCase().endsWith('.json')||text.trimStart().startsWith('{')){
     let value;try{value=JSON.parse(text)}catch{throw new Error('ボードファイルを読み込めませんでした')}
     const board=validateBoard(value),assets=[];
@@ -1015,11 +2315,72 @@ async function importBoardFile(file){
     // Remap IDs so importing a board cannot overwrite images used by undo history.
     const mapping=new Map();for(const asset of assets){const id=newMediaId('asset');mapping.set(asset.id,id);await storeAsset({...asset,id})}
     const settings=readSettings(board.source);settings.media=settings.media.map(card=>card.type==='image'?{...card,assetId:mapping.get(card.assetId)}:card);
-    $('#flowName').value=board.name;$('#theme').value=board.theme;activeEmbedId=null;fitToView=true;commitDocument(writeSettings(board.source,settings),{selection:null,mediaSelection:null});saveDraft();toast('画像を含むボードを読み込みました');
+    activeEmbedId=null;fitToView=true;commitDocument(writeSettings(board.source,settings),{selection:null,mediaSelection:null,name:board.name,theme:board.theme});saveDraft();toast('画像を含むボードを読み込みました');
   }else{activeEmbedId=null;fitToView=true;commitDocument(text,{selection:null,mediaSelection:null});toast('テキストを読み込みました')}
 }
 
-setEditMode(storageGet('simple-flow-editor-mode','visual'));render();saveDraft();updateHistoryButtons();
+const sequenceReference={"name":"案件管理 業務フロー シーケンス図","sequence":{"participants":[{"id":"cus","name":"お客様","sub":"","icon":"person","color":"#39485a"},{"id":"tan","name":"担当者","sub":"受付 / 案件担当 / 担当部署","icon":"person","color":"#39485a"},{"id":"apv","name":"承認者","sub":"上席 / 部長 / 社長","icon":"person","color":"#4e4a63"},{"id":"app","name":"案件管理アプリ","sub":"kintone","icon":"monitor","color":"#185fa5"},{"id":"est","name":"見積目次アプリ","sub":"kintone / 520","icon":"monitor","color":"#0f6e56"},{"id":"inv","name":"請求目次アプリ","sub":"kintone / 530","icon":"monitor","color":"#993c1d"},{"id":"mst","name":"マスタアプリ","sub":"承認ルート(491) / 支援者・取引先","icon":"db","color":"#7a6a3e"}],"messages":[{"id":"m1","phase":"受付・登録","from":"cus","to":"tan","text":"案件の相談・問い合わせ（訪問／電話／メール／zoom）","kind":"manual","status":"","route":"normal"},{"id":"m2","phase":"受付・登録","from":"tan","to":"app","text":"レコードを新規作成し、受付日付・受付所属部署・受付担当者を入力","kind":"form","status":"","route":"normal"},{"id":"m3","phase":"受付・登録","from":"app","to":"mst","text":"顧客情報をルックアップ取得（マスタに無ければ手入力）","kind":"api","status":"","route":"normal"},{"id":"m4","phase":"受付・登録","from":"tan","to":"app","text":"区分・確度・見込額・見込み時期を入力","kind":"form","status":"情報受付","route":"normal"},{"id":"m5","phase":"稟議","from":"tan","to":"app","text":"稟議にて上席承認を申請（新規契約は金額に関わらず必須）","kind":"click","status":"","route":"normal"},{"id":"m6","phase":"稟議","from":"app","to":"mst","text":"区分に応じた承認ルートを取得","kind":"api","status":"","route":"normal"},{"id":"m7","phase":"稟議","from":"app","to":"apv","text":"承認依頼を通知","kind":"notify","status":"","route":"normal"},{"id":"m8","phase":"稟議","from":"apv","to":"app","text":"承認（社外取引先→社長承認／山九・関係会社→部長承認）","kind":"click","status":"","route":"normal"},{"id":"m9","phase":"稟議","from":"apv","to":"tan","text":"却下の場合：案件内容の見直しを依頼","kind":"mail","status":"","route":"reject"},{"id":"m10","phase":"見積","from":"tan","to":"app","text":"アクション「見積作成」を押下","kind":"appact","status":"","route":"normal"},{"id":"m11","phase":"見積","from":"app","to":"est","text":"案件情報を引き継ぎ、見積レコードを作成","kind":"api","status":"","route":"normal"},{"id":"m12","phase":"見積","from":"tan","to":"est","text":"見積情報を入力","kind":"form","status":"","route":"normal"},{"id":"m13","phase":"見積","from":"tan","to":"est","text":"k-Report「見積作成」を押下","kind":"click","status":"","route":"normal"},{"id":"m14","phase":"見積","from":"est","to":"mst","text":"承認ルートを取得（対象組織・対象グループ）","kind":"api","status":"","route":"normal"},{"id":"m15","phase":"見積","from":"apv","to":"est","text":"見積を承認","kind":"click","status":"見積承認完了","route":"normal"},{"id":"m16","phase":"見積","from":"apv","to":"tan","text":"却下の場合：見積内容の修正を依頼","kind":"mail","status":"","route":"reject"},{"id":"m17","phase":"見積","from":"tan","to":"cus","text":"見積書を送付（見積作成フラグ ＝ 済）","kind":"mail","status":"","route":"normal"},{"id":"m18","phase":"見積","from":"tan","to":"app","text":"進捗状況を「商談中」に更新","kind":"click","status":"商談中","route":"normal"},{"id":"m19","phase":"見積","from":"cus","to":"tan","text":"発注可否を回答","kind":"manual","status":"","route":"normal"},{"id":"m20","phase":"見積","from":"tan","to":"app","text":"失注の場合：進捗「見送り」に更新し失注理由を対応履歴に記録","kind":"form","status":"見送り","route":"reject"},{"id":"m21","phase":"受注・書類授受","from":"tan","to":"app","text":"受注確定。担当部署・案件担当者を設定","kind":"form","status":"確定","route":"normal"},{"id":"m22","phase":"受注・書類授受","from":"tan","to":"app","text":"プロセス「見積対応完了」を押下","kind":"click","status":"見積対応済","route":"normal"},{"id":"m23","phase":"受注・書類授受","from":"tan","to":"app","text":"k-Report「注文書作成」を押下","kind":"click","status":"","route":"normal"},{"id":"m24","phase":"受注・書類授受","from":"tan","to":"cus","text":"注文書を送付","kind":"mail","status":"","route":"normal"},{"id":"m25","phase":"受注・書類授受","from":"cus","to":"tan","text":"注文書に押印し返送","kind":"manual","status":"","route":"normal"},{"id":"m26","phase":"受注・書類授受","from":"tan","to":"app","text":"プロセス「注文書対応完了」を押下","kind":"click","status":"注文書対応済","route":"normal"},{"id":"m27","phase":"受注・書類授受","from":"tan","to":"app","text":"k-Report「注文請書」を押下","kind":"click","status":"","route":"normal"},{"id":"m28","phase":"受注・書類授受","from":"tan","to":"cus","text":"注文請書を送付","kind":"mail","status":"","route":"normal"},{"id":"m29","phase":"受注・書類授受","from":"cus","to":"tan","text":"注文請書に押印し返送","kind":"manual","status":"","route":"normal"},{"id":"m30","phase":"受注・書類授受","from":"tan","to":"app","text":"プロセス「注文請書対応完了」を押下","kind":"click","status":"注文請書対応済","route":"normal"},{"id":"m31","phase":"実作業","from":"tan","to":"tan","text":"役務の実施（担当部署）","kind":"manual","status":"","route":"normal"},{"id":"m32","phase":"実作業","from":"tan","to":"app","text":"進捗状況を「作業中」に更新","kind":"click","status":"作業中","route":"normal"},{"id":"m33","phase":"実作業","from":"tan","to":"app","text":"k-Report「作業完了届作成」を押下","kind":"click","status":"","route":"normal"},{"id":"m34","phase":"実作業","from":"tan","to":"cus","text":"作業完了届を送付（帳票の要否は社内確認中）","kind":"mail","status":"","route":"normal"},{"id":"m35","phase":"実作業","from":"cus","to":"tan","text":"作業完了届に押印し返送","kind":"manual","status":"","route":"normal"},{"id":"m36","phase":"実作業","from":"tan","to":"app","text":"プロセス「作業完了届対応完了」を押下","kind":"click","status":"作業完了届対応済","route":"normal"},{"id":"m37","phase":"請求・実績","from":"tan","to":"app","text":"アクション「請求書作成」を押下（作業完了から3日以内）","kind":"appact","status":"","route":"normal"},{"id":"m38","phase":"請求・実績","from":"app","to":"inv","text":"案件情報を引き継ぎ、請求レコードを作成","kind":"api","status":"","route":"normal"},{"id":"m39","phase":"請求・実績","from":"tan","to":"inv","text":"請求情報を入力","kind":"form","status":"","route":"normal"},{"id":"m40","phase":"請求・実績","from":"tan","to":"inv","text":"k-Report「請求作成」を押下","kind":"click","status":"","route":"normal"},{"id":"m41","phase":"請求・実績","from":"inv","to":"mst","text":"承認ルートを取得（対象組織・対象グループ）","kind":"api","status":"","route":"normal"},{"id":"m42","phase":"請求・実績","from":"apv","to":"inv","text":"請求を承認（請求書作成フラグ ＝ 済）","kind":"click","status":"請求承認完了","route":"normal"},{"id":"m43","phase":"請求・実績","from":"apv","to":"tan","text":"却下の場合：請求内容の修正を依頼","kind":"mail","status":"","route":"reject"},{"id":"m44","phase":"請求・実績","from":"tan","to":"cus","text":"請求書を送付","kind":"mail","status":"","route":"normal"},{"id":"m45","phase":"請求・実績","from":"tan","to":"app","text":"プロセス「請求対応完了」を押下","kind":"click","status":"請求書送付完了","route":"normal"},{"id":"m46","phase":"請求・実績","from":"tan","to":"app","text":"実績額を入力し、見込額との差異を確認","kind":"form","status":"","route":"normal"},{"id":"m47","phase":"請求・実績","from":"cus","to":"inv","text":"（将来）経理が入金を確認し消込","kind":"manual","status":"","route":"future"}],"notes":["本図は「案件管理_業務フロー図_スイムレーン_v2.xlsx」（全38工程）と同じ内容を、登場人物とアプリのやり取りとして展開したものです。スイムレーン版の1工程が、本図では複数の矢印に分かれている箇所があります。","人の操作が必要なのは 1・2・4・5・8・10・12・13・15・17〜46 です。アプリが自動で行うのは 3・6・11・14・38・41 のルックアップとアプリ間のデータ引き継ぎ、および 7 の通知です。承認者は承認ルートマスタ（491）で対象組織・対象グループごとに設定されたルートに基づいて決まります。","赤の破線（9・16・20・43）は正常時には発生しません。9 は稟議の却下で 4 の案件内容の見直しへ、16 は見積承認の却下で 12 の見積情報入力へ、43 は請求承認の却下で 39 の請求情報入力へ戻ります。20 はお客様が発注を見送った場合で、進捗状況「見送り」と失注理由を記録して終了します。","8 の承認ルートは区分により分かれ、社外取引先は社長承認まで、山九・関係会社は部長承認までとなります（承認基準は社内確認中）。34 の作業完了届は帳票としての要否を社内確認中です。37 の請求書作成は請求漏れを防ぐため作業完了から3日以内の実施を想定しています。47 の入金確認・消込は現在の4アプリでは未対応のため、将来工程として点線で示しています。","対応履歴（日時・活動内容・内容・添付ファイル）は、1 の相談段階から全工程を通じて随時記録します。お客様から受領した押印済みの注文書・注文請書・作業完了届の保管方法は本図の範囲外です。"]}};
+let selectedSequenceId=null,selectedParticipantId=null,sequenceView=null;
+function isSequence(){return readSettings(source.value).diagramType==='sequence'}
+function sequenceData(){return readSettings(source.value).sequence}
+function sequenceId(prefix,list){let n=1;while(list.some(item=>item.id===prefix+n))n++;return prefix+n}
+function commitSequence(sequence,selection=selectedSequenceId,options={}){
+  const settings=readSettings(source.value);settings.diagramType='sequence';settings.sequence=normalizeSequence(sequence);selectedSequenceId=selection;
+  commitDocument(writeSettings(source.value,settings),{selection:null,mediaSelection:null,...options});syncSequenceInspector();
+}
+function fillSequenceOptions(select,items,value,label){select.replaceChildren();for(const item of items){const option=document.createElement('option');option.value=item.id;option.textContent=label(item);select.appendChild(option)}select.value=value||''}
+function syncSequenceInspector(){
+  const enabled=lastGraph?.settings.diagramType==='sequence';document.body.classList.toggle('sequence-mode',enabled);$('#sequencePanel').hidden=!enabled;$('#diagramType').value=enabled?'sequence':'flow';if(!enabled)return;
+  const seq=lastGraph.settings.sequence;if(!seq.messages.some(item=>item.id===selectedSequenceId))selectedSequenceId=seq.messages[0]?.id||null;
+  const index=seq.messages.findIndex(item=>item.id===selectedSequenceId),row=seq.messages[index];$('#seqInspector').hidden=!row||!!selectedMediaId;
+  fillSequenceOptions($('#seqStepSelect'),seq.messages,selectedSequenceId,item=>(seq.messages.indexOf(item)+1)+'. '+item.text.slice(0,36));
+  if(row){fillSequenceOptions($('#seqFrom'),seq.participants,row.from,item=>item.name);fillSequenceOptions($('#seqTo'),seq.participants,row.to,item=>item.name);$('#seqPhase').value=row.phase;$('#seqText').value=row.text;$('#seqKind').value=row.kind;$('#seqStatus').value=row.status;$('#seqRoute').value=row.route;$('#seqUpBtn').disabled=index===0;$('#seqDownBtn').disabled=index===seq.messages.length-1}
+  $('#seqNotes').value=seq.notes.join('\n');svg.querySelectorAll('[data-seq-message]').forEach(el=>{el.classList.toggle('is-selected',el.dataset.seqMessage===selectedSequenceId&&!selectedMediaId);el.setAttribute('aria-pressed',String(el.dataset.seqMessage===selectedSequenceId&&!selectedMediaId))});
+  $('#interactionHint').textContent='列の見出し・番号付き矢印をクリックして編集。上から下が処理の順番です';
+}
+function revealSequence(){const el=svg.querySelector(`[data-seq-message="${selectedSequenceId}"]`);el?.scrollIntoView({block:'nearest',inline:'nearest'});el?.focus({preventScroll:true})}
+function selectSequence(id,reveal=false){selectedSequenceId=id;selectedNodeId=null;selectedMediaId=null;setEditMode('visual');syncSelection();if(reveal)revealSequence()}
+function switchDiagram(type){const settings=readSettings(source.value);settings.diagramType=type;if(type==='sequence'&&!settings.sequence.participants.length)settings.sequence=seedSequence(parse(source.value));selectedSequenceId=null;selectedNodeId=null;selectedMediaId=null;connectingFrom=null;fitToView=false;commitDocument(writeSettings(source.value,settings));setEditMode('visual');if(type==='sequence')fitSequenceWidth();else fitDiagram()}
+$('#diagramType').onchange=()=>switchDiagram($('#diagramType').value);
+function fitSequenceWidth(){if(!isSequence())return fitDiagram();const style=getComputedStyle(canvas);zoom=Math.min(1,Math.max(.05,(canvas.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)-2)/svg.viewBox.baseVal.width));fitToView=false;applyZoom();canvas.scrollTo(0,0)}
+$('#seqWidthBtn').onclick=fitSequenceWidth;
+$('#seqFromFlowBtn').onclick=()=>{const seq=seedSequence(parse(source.value));commitSequence(seq,seq.messages[0]?.id);fitSequenceWidth();toast('元のフローから手順を作成しました。内容・順番を調整できます')};
+$('#seqReferenceBtn').onclick=()=>{commitSequence(sequenceReference.sequence,sequenceReference.sequence.messages[0]?.id,{name:sequenceReference.name});fitSequenceWidth();toast('見本の7列・47手順を読み込みました。「戻す」で取り消せます')};
+$('#seqStepSelect').onchange=()=>selectSequence($('#seqStepSelect').value,true);
+$('#seqAddBtn').onclick=()=>{const seq=sequenceData();if(seq.messages.length>=500)return toast('手順は500件までです');if(!seq.participants.length)seq.participants=[{id:'p1',name:'担当者',sub:'',icon:'person',color:'#39485a'},{id:'p2',name:'アプリ',sub:'',icon:'monitor',color:'#185fa5'}];const index=seq.messages.findIndex(row=>row.id===selectedSequenceId),previous=seq.messages[index],row={id:sequenceId('m',seq.messages),phase:previous?.phase||'受付',from:previous?.from||seq.participants[0].id,to:previous?.to||seq.participants.at(-1).id,text:'新しい手順',kind:'manual',status:'',route:'normal'};seq.messages.splice(index<0?seq.messages.length:index+1,0,row);commitSequence(seq,row.id);revealSequence();$('#seqText').focus();$('#seqText').select()};
+$('#seqStepForm').onsubmit=event=>{event.preventDefault();const seq=sequenceData(),row=seq.messages.find(item=>item.id===selectedSequenceId);if(!row)return;const text=$('#seqText').value.trim();if(!text)return;Object.assign(row,{phase:$('#seqPhase').value.trim(),from:$('#seqFrom').value,to:$('#seqTo').value,text,kind:$('#seqKind').value,status:$('#seqStatus').value.trim(),route:$('#seqRoute').value});commitSequence(seq);toast('手順を更新しました')};
+function moveSequenceRow(delta){const seq=sequenceData(),index=seq.messages.findIndex(item=>item.id===selectedSequenceId),target=index+delta;if(index<0||target<0||target>=seq.messages.length)return;[seq.messages[index],seq.messages[target]]=[seq.messages[target],seq.messages[index]];commitSequence(seq);revealSequence()}
+$('#seqUpBtn').onclick=()=>moveSequenceRow(-1);$('#seqDownBtn').onclick=()=>moveSequenceRow(1);
+function duplicateSequenceRow(){const seq=sequenceData(),index=seq.messages.findIndex(item=>item.id===selectedSequenceId);if(index<0)return;if(seq.messages.length>=500)return toast('手順は500件までです');const row={...seq.messages[index],id:sequenceId('m',seq.messages)};seq.messages.splice(index+1,0,row);commitSequence(seq,row.id);revealSequence()}
+function deleteSequenceRow(){const seq=sequenceData(),index=seq.messages.findIndex(item=>item.id===selectedSequenceId);if(index<0)return;seq.messages.splice(index,1);commitSequence(seq,seq.messages[Math.min(index,seq.messages.length-1)]?.id||null);toast('手順を削除しました。「戻す」で取り消せます')}
+$('#seqDuplicateBtn').onclick=duplicateSequenceRow;$('#seqDeleteBtn').onclick=deleteSequenceRow;
+$('#seqImageBtn').onclick=()=>$('#addImageBtn').click();$('#seqLinkBtn').onclick=()=>$('#addEmbedBtn').click();
+$('#seqNotesSaveBtn').onclick=()=>{const seq=sequenceData();seq.notes=$('#seqNotes').value.split('\n').map(line=>line.trim()).filter(Boolean);commitSequence(seq);toast('注記を更新しました')};
+function syncParticipantForm(){
+  const seq=sequenceData();if(!seq.participants.some(item=>item.id===selectedParticipantId))selectedParticipantId=seq.participants[0]?.id;const person=seq.participants.find(item=>item.id===selectedParticipantId);fillSequenceOptions($('#seqPersonSelect'),seq.participants,selectedParticipantId,item=>item.name);$('#seqPersonForm').hidden=!person;$('#seqPersonError').hidden=true;
+  if(person){$('#seqPersonName').value=person.name;$('#seqPersonSub').value=person.sub;$('#seqPersonIcon').value=person.icon;$('#seqPersonColor').value=person.color}
+  const index=seq.participants.indexOf(person);$('#seqPersonLeft').disabled=index<=0;$('#seqPersonRight').disabled=index<0||index===seq.participants.length-1;$('#seqPersonDelete').disabled=!person;
+}
+function openSequencePeople(id=null){selectedParticipantId=id||selectedParticipantId;syncParticipantForm();$('#seqPeopleDialog').showModal()}
+$('#seqPeopleBtn').onclick=()=>openSequencePeople();$('#seqPeopleClose').onclick=()=>$('#seqPeopleDialog').close();$('#seqPersonSelect').onchange=()=>{selectedParticipantId=$('#seqPersonSelect').value;syncParticipantForm()};
+$('#seqPersonForm').onsubmit=event=>{event.preventDefault();const seq=sequenceData(),person=seq.participants.find(item=>item.id===selectedParticipantId);if(!person)return;const name=$('#seqPersonName').value.trim();if(!name)return;Object.assign(person,{name,sub:$('#seqPersonSub').value.trim(),icon:$('#seqPersonIcon').value,color:$('#seqPersonColor').value});commitSequence(seq);syncParticipantForm();toast('列を更新しました')};
+$('#seqPersonAdd').onclick=()=>{const seq=sequenceData();if(seq.participants.length>=40)return toast('登場人物は40列までです');const person={id:sequenceId('p',seq.participants),name:'新しい担当者',sub:'',icon:'person',color:'#39485a'};seq.participants.push(person);selectedParticipantId=person.id;commitSequence(seq);syncParticipantForm();$('#seqPersonName').focus();$('#seqPersonName').select()};
+$('#seqPersonDelete').onclick=()=>{const seq=sequenceData();if(seq.messages.some(row=>row.from===selectedParticipantId||row.to===selectedParticipantId)){$('#seqPersonError').textContent='この列を使う手順があります。先に「誰から」「誰へ」を変更してください。';$('#seqPersonError').hidden=false;return}seq.participants=seq.participants.filter(item=>item.id!==selectedParticipantId);commitSequence(seq);syncParticipantForm()};
+function moveParticipant(delta){const seq=sequenceData(),index=seq.participants.findIndex(item=>item.id===selectedParticipantId),target=index+delta;if(index<0||target<0||target>=seq.participants.length)return;[seq.participants[index],seq.participants[target]]=[seq.participants[target],seq.participants[index]];commitSequence(seq);syncParticipantForm()}
+$('#seqPersonLeft').onclick=()=>moveParticipant(-1);$('#seqPersonRight').onclick=()=>moveParticipant(1);
+function renderSequenceMode(graph){
+  sequenceView=renderSequenceDiagram(graph.settings.sequence,$('#theme').value);graph.width=Math.max(sequenceView.width,...graph.settings.media.map(card=>card.x+card.width+60));graph.height=Math.max(sequenceView.height,...graph.settings.media.map(card=>card.y+card.height+60));lastGraph=graph;
+  svg.setAttribute('viewBox',`0 0 ${graph.width} ${graph.height}`);svg.innerHTML=sequenceView.markup+renderMediaCards(graph.settings.media);$('#empty').style.display='none';$('#status').className='status';$('#status').textContent=`${graph.settings.sequence.participants.length}列・${graph.settings.sequence.messages.length}手順`;
+  syncSelection();if(!dragState){if(fitToView)fitDiagram();else applyZoom();hydrateAssets()}
+}
+function loadSequenceHtml(text){const imported=importSequenceHtml(text);const settings=readSettings(source.value);settings.diagramType='sequence';settings.sequence=imported.sequence;selectedSequenceId=null;activeEmbedId=null;commitDocument(writeSettings(source.value,settings),{selection:null,mediaSelection:null,name:imported.name||'シーケンス図'});setEditMode('visual');fitSequenceWidth();saveDraft();toast(`${imported.sequence.participants.length}列・${imported.sequence.messages.length}手順を読み込みました`)}
+function buildShareHtml(svgMarkup,name,sequence=null){
+  const data=sequence?'<script type="application/json" id="sequence-board-data">'+JSON.stringify({format:'simple-flow-sequence',version:1,name,sequence}).replace(/</g,'\\u003c')+'<\/script>':'';
+  return '<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escapeHtml(name)+'</title><style>*{box-sizing:border-box}body{margin:0;background:#eef1f4;color:#1b2733;font-family:Meiryo,sans-serif}.wrap{max-width:1800px;margin:auto;padding:28px}h1{font-size:25px;margin:0 0 10px}p{font-size:14px;color:#5b6b7a}.board{overflow:auto;background:white;border:1px solid #d8dee4;border-radius:12px;padding:16px}.board>svg{display:block;width:100%;height:auto;min-width:900px}@media print{body{background:white}.wrap{padding:0}.board{overflow:visible;padding:0;border:0}.board>svg{min-width:0}}</style></head><body><main class="wrap"><h1>'+escapeHtml(name)+'</h1><p>'+(sequence?'縦の列が登場人物・アプリ、矢印がやり取りです。上から下へ時系列に進みます。全'+sequence.messages.length+'手順。':'担当レーンごとの業務フロー図')+'</p><div class="board">'+svgMarkup+'</div></main>'+data+'</body></html>';
+}
+$('#saveHtmlBtn').onclick=async()=>{if(!svg.innerHTML||!await ensureExportAssets())return;const copy=exportSvg(),name=$('#flowName').value||'業務フロー',sequence=isSequence()?sequenceData():null;downloadBoard(new Blob([buildShareHtml(new XMLSerializer().serializeToString(copy),name,sequence)],{type:'text/html;charset=utf-8'}),'.html');toast('表示用HTMLを保存しました')};
+
+setEditMode(storageGet('simple-flow-editor-mode','visual'));render();if(isSequence())fitSequenceWidth();saveDraft();updateHistoryButtons();
 </script>
 </body>
 </html>
