@@ -6,4 +6,4 @@
 
 @docs/agent-orchestration.md
 
-Codex/GPT は `gpt-5.6-luna` / `max`、Claude Code は `repo-executor`（Sonnet / `high`）を実行担当にする。
+Codex/GPT は `gpt-luna` / `max`、Claude Code は `repo-executor`（Sonnet 5（最新版） / `high`）を実行担当にする。

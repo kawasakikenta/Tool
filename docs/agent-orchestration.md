@@ -5,8 +5,8 @@
 
 | 利用する環境 | 実行担当 | 推論強度 | 設定ファイル |
 | --- | --- | --- | --- |
-| Codex / GPT | `gpt-5.6-luna` | `max` | `.codex/config.toml` の `[agents]` |
-| Claude Code | `repo-executor`（`sonnet`） | `high` | `.claude/agents/repo-executor.md` |
+| Codex / GPT | `gpt-luna` | `max` | `.codex/config.toml` の `[agents]` |
+| Claude Code | `repo-executor`（`sonnet`（最新版エイリアス。2026年9月時点で Sonnet 5）） | `high` | `.claude/agents/repo-executor.md` |
 
 ## 作業の進め方
 
@@ -18,8 +18,8 @@
 
 ## 実行担当の選び方
 
-- Codex では子エージェントのモデルを `gpt-5.6-luna`、推論強度を `max` にする。明示的な起動指定が必要な場合も、この組み合わせを指定する。
-- Claude Code では調査・実装・検証の委譲先に `repo-executor` を指定する。このカスタムエージェントは Sonnet / high で実行する。
+- Codex では子エージェントのモデルを `gpt-luna`、推論強度を `max` にする。明示的な起動指定が必要な場合も、この組み合わせを指定する。
+- Claude Code では調査・実装・検証の委譲先に `repo-executor` を指定する。このカスタムエージェントは Sonnet 5（最新版） / high で実行する。
 - 指定モデルを利用できない場合は、別モデルへ黙って切り替えず、利用できなかった設定と理由を親へ報告する。
 - 子エージェントは依頼された範囲に集中し、追加の割り振りが必要なら親へ返す。
 
@@ -34,7 +34,7 @@
 
 設定はリポジトリ内に置いてある。反映を確認するときは、このリポジトリを開いた新しいセッションを開始する。
 Codex のプロジェクト設定は、そのプロジェクトを信頼済みとして扱う場合に読み込まれる。
-Claude Code の Sonnet / high は `repo-executor` を起動したときに適用され、親セッションのモデル指定とは独立している。
+Claude Code の Sonnet 5（最新版） / high は `repo-executor` を起動したときに適用され、親セッションのモデル指定とは独立している。
 
 仕様の参照先:
 

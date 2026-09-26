@@ -1,5 +1,5 @@
 # 実行担当の子エージェント。親のモデルは起動時の選択を使用する。
 [agents]
 enabled = true
-default_subagent_model = "gpt-5.6-luna"
+default_subagent_model = "gpt-luna"
 default_subagent_reasoning_effort = "max"

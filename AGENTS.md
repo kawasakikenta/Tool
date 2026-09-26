@@ -4,4 +4,4 @@
 
 ## オーケストレーション
 
-Codex/GPT の実行担当は `gpt-5.6-luna` / `max`、Claude Code の実行担当は `repo-executor`（Sonnet / `high`）を使う。
+Codex/GPT の実行担当は `gpt-luna` / `max`、Claude Code の実行担当は `repo-executor`（Sonnet 5（最新版） / `high`）を使う。
