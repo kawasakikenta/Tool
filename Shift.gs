@@ -391,7 +391,7 @@ function initializeShiftCellsOnly() {
   if (oldFormatSheets.length > 0) {
     msg += `\n\n旧形式のためスキップ: ${oldFormatSheets.slice(0, 10).join(', ')}`;
     if (oldFormatSheets.length > 10) msg += ` ...他 ${oldFormatSheets.length - 10} 件`;
-    msg += '\n旧形式の日は、先に「最新のカレンダー予定を反映（シフト保持）」を実行してください。';
+    msg += '\n旧形式の日は、先に「① カレンダー予定を反映」を実行してください。';
   }
   if (confirmedSheets.length > 0) {
     msg += `\n\n確定済みのためスキップ: ${confirmedSheets.slice(0, 10).join(', ')}`;
@@ -405,6 +405,7 @@ function initializeShiftCellsOnly() {
 /** ===================== 既存: カレンダー反映 ===================== */
 
 function updateTeamCalendarSheets() {
+  resetFetchErrors_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const setSheet = ss.getSheetByName('設定');
 
@@ -434,6 +435,7 @@ function updateTeamCalendarSheets() {
   const timeSlots = generateTimeSlots(startTimeStr, endTimeStr);
   const weeklyAssignmentCfg = readWeeklyAssignments_(setSheet, users);
   let confirmedSkipCount = 0;
+  const lockWarnings = [];
 
   for (let d = 0; d < daysToFetch; d++) {
     let targetDate = new Date(startDate.getTime());
@@ -463,7 +465,12 @@ function updateTeamCalendarSheets() {
     addDailyTotalsRow(sheet, users, timeSlots);
 
     if (savedShiftMap) {
-      restoreShiftData(sheet, users, timeSlots, savedShiftMap);
+      const restored = restoreShiftData(sheet, users, timeSlots, savedShiftMap);
+      if (restored && (restored.droppedLocks.length > 0 || restored.lockRestoreSkipped)) {
+        lockWarnings.push(restored.lockRestoreSkipped
+          ? `${sheetName}: ユーザーの人数が変わったためロックを復元できませんでした（ロックを付け直してください）`
+          : `${sheetName}: 一覧に居ない人のロックを復元できませんでした（${restored.droppedLocks.join('、')}）`);
+      }
     }
 
     // カレンダー反映時点でも、日ごとの主担当フラグを表示する。
@@ -495,6 +502,12 @@ function updateTeamCalendarSheets() {
   if (confirmedSkipCount > 0) {
     doneMsg += `\n確定済みのためスキップ: ${confirmedSkipCount}日`;
   }
+  if (lockWarnings.length > 0) {
+    doneMsg += '\n\n【ロックを復元できなかった日】\n' + lockWarnings.slice(0, 10).map(t => '・' + t).join('\n');
+    if (lockWarnings.length > 10) doneMsg += `\n...他 ${lockWarnings.length - 10} 件`;
+  }
+  const fetchErrorMsg = formatFetchErrorMessage_(users);
+  if (fetchErrorMsg) doneMsg += '\n\n' + fetchErrorMsg;
   Browser.msgBox(doneMsg);
 }
 
@@ -598,7 +611,7 @@ function extractFreeTimeCore_(freeTimeOptions) {
 
     const shiftCol1 = users.length + 2;
 
-    // シフト4列を取得
+    // シフト列（ユーザー数分）を取得
     let shifts;
     try {
       shifts = sheet.getRange(TIME_SLOT_START_ROW, shiftCol1, numSlots, users.length).getValues();
@@ -932,6 +945,7 @@ function diffHours(startStr, endStr) {
 function autoAssignShifts(preserveManual, options) {
   options = options || {};
   resetOperationConfigCache_();
+  resetFetchErrors_();
   const dryRun = options.dryRun === true;
   const silent = options.silent === true;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -944,9 +958,15 @@ function autoAssignShifts(preserveManual, options) {
   }
 
   if (!preserveManual && !dryRun && !options.skipConfirm) {
+    // シフト列の数は登録ユーザー数と同じ（固定ではない）。実際の列数を確認文に入れる。
+    const confirmUserCount = readUsers(setSheet).length;
+    if (confirmUserCount === 0) {
+      ui.alert('ユーザーが登録されていません。');
+      return;
+    }
     const res = ui.alert(
       '確認',
-      '既存のシフト（4列分）が全て削除され、自動で再割り当てされます。続行しますか？',
+      `既存のシフト（${confirmUserCount}列分＝登録ユーザー${confirmUserCount}名分）が全て削除され、自動で再割り当てされます。続行しますか？`,
       ui.ButtonSet.OK_CANCEL
     );
     if (res !== ui.Button.OK) return;
@@ -1012,14 +1032,7 @@ function autoAssignShifts(preserveManual, options) {
   const specialBlockKeywordRaw = String(setSheet.getRange(SPECIAL_BLOCK_KEYWORD_CELL).getValue() || '');
   const specialBlockKeywords = parseKeywordList(specialBlockKeywordRaw);
 
-  const adminEmailRaw = setSheet.getRange(ADMIN_EMAIL_CELL).getValue();
-  const adminEmails = new Set();
-  if (adminEmailRaw) {
-    String(adminEmailRaw).split(/[,,;\s]+/).forEach(e => {
-      const trimmed = e.trim().toLowerCase();
-      if (trimmed) adminEmails.add(trimmed);
-    });
-  }
+  const adminEmails = parseEmailSet(setSheet.getRange(ADMIN_EMAIL_CELL).getValue());
 
   const users = readUsers(setSheet);
   if (users.length === 0) {
@@ -1041,14 +1054,7 @@ function autoAssignShifts(preserveManual, options) {
     .setValue('メイン担当外')
     .setBackground('#674ea7').setFontColor('#ffffff').setFontWeight('bold').setHorizontalAlignment('center');
 
-  const parseEmails = (raw) => {
-    const set = new Set();
-    if (raw) String(raw).split(/[,,;\s]+/).forEach(e => {
-      const t = e.trim().toLowerCase();
-      if (t) set.add(t);
-    });
-    return set;
-  };
+  const parseEmails = parseEmailSet;
   const main1Emails = parseEmails(setSheet.getRange(MAIN_USER1_CELL).getValue());
   const main2Emails = parseEmails(setSheet.getRange(MAIN_USER2_CELL).getValue());
   const main3Emails = parseEmails(setSheet.getRange(MAIN_USER3_CELL).getValue());
@@ -1111,7 +1117,7 @@ function autoAssignShifts(preserveManual, options) {
 
     const sheet = ss.getSheetByName(dateStr);
     if (!sheet) {
-      warnings.push(`${dateStr}: 日付シートがありません（先に「最新のカレンダー予定を反映」を実行してください）`);
+      warnings.push(`${dateStr}: 日付シートがありません（先に「① カレンダー予定を反映」を実行してください）`);
       continue;
     }
 
@@ -1122,7 +1128,7 @@ function autoAssignShifts(preserveManual, options) {
 
     const a4 = sheet.getRange(4, 1).getDisplayValue().trim();
     if (/^\d{1,2}:\d{2}$/.test(a4)) {
-      warnings.push(`${dateStr}: 古いシート形式です。先に「最新のカレンダー予定を反映」を実行して新しい形式（ロック行付き）に変換してください`);
+      warnings.push(`${dateStr}: 古いシート形式です。先に「① カレンダー予定を反映」を実行して新しい形式（ロック行付き）に変換してください`);
       continue;
     }
 
@@ -1147,6 +1153,11 @@ function autoAssignShifts(preserveManual, options) {
     });
   }
 
+  // 予定を取得できなかったカレンダーは「予定なし」として扱われるため、警告の先頭に出す。
+  getFetchErrorSummaries_(users).reverse().forEach(t => {
+    warnings.unshift(`予定を取得できませんでした（予定なしとして扱い、予定と重なるシフトが入る可能性があります）: ${t}`);
+  });
+
   if (daysData.length === 0) {
     let msg = '処理対象の日がありません。';
     if (warnings.length > 0) {
@@ -1154,7 +1165,7 @@ function autoAssignShifts(preserveManual, options) {
       if (warnings.length > 15) msg += `\n...他 ${warnings.length - 15} 件`;
       const oldFormatCount = warnings.filter(w => w.includes('古いシート形式')).length;
       if (oldFormatCount > 0) {
-        msg += `\n\n→ メニューから「最新のカレンダー予定を反映」を実行してください。\n   ${oldFormatCount}日分のシートが新形式（ロック行付き）に変換されます。`;
+        msg += `\n\n→ メニューから「① カレンダー予定を反映」を実行してください。\n   ${oldFormatCount}日分のシートが新形式（ロック行付き）に変換されます。`;
       }
     }
     ui.alert(msg);
@@ -1489,11 +1500,11 @@ function autoAssignShifts(preserveManual, options) {
       const avail12 = forceIdxs.filter(i =>
         (users[i].mainRank === 1 || users[i].mainRank === 2) &&
         !day.lockedCols[i] && !isUserInactiveForDay_(day, i) &&
-        !day.userEvents[i].some(ev => isAllDayEventSafe(ev)));
+        !day.userEvents[i].some(ev => shift_isAllDayEventSafe_(ev)));
       const availBackup = forceIdxs.filter(i =>
         users[i].mainRank === 3 &&
         !day.lockedCols[i] && !isUserInactiveForDay_(day, i) &&
-        !day.userEvents[i].some(ev => isAllDayEventSafe(ev)));
+        !day.userEvents[i].some(ev => shift_isAllDayEventSafe_(ev)));
       if (avail12.length === 0 && availBackup.length === 0) return;
       day.mainAnchored = true;
 
@@ -1957,7 +1968,7 @@ function autoAssignShifts(preserveManual, options) {
           !users[i].isAdmin &&
           !day.lockedCols[i] &&
           !isUserInactiveForDay_(day, i) &&
-          !day.userEvents[i].some(ev => isAllDayEventSafe(ev))
+          !day.userEvents[i].some(ev => shift_isAllDayEventSafe_(ev))
         );
         if (eligible.length === 0) return;
 
@@ -2042,7 +2053,7 @@ function autoAssignShifts(preserveManual, options) {
         !users[i].isAdmin &&
         !day.lockedCols[i] &&
         !isUserInactiveForDay_(day, i) &&
-        !day.userEvents[i].some(ev => isAllDayEventSafe(ev))
+        !day.userEvents[i].some(ev => shift_isAllDayEventSafe_(ev))
       );
       if (eligible.length === 0) return;
 
@@ -2174,7 +2185,7 @@ function autoAssignShifts(preserveManual, options) {
       if (s < 0 || s >= numSlots || isLunchSlot[s]) return false;
       if (users[uIdx].isAdmin) return false;
       if (day.lockedCols[uIdx]) return false;
-      if (day.userEvents[uIdx].some(ev => isAllDayEventSafe(ev))) return false;
+      if (day.userEvents[uIdx].some(ev => shift_isAllDayEventSafe_(ev))) return false;
       if (userDailySlots[dayIdx][uIdx] > 0) return false;                // 2人目として新規参加する人だけ
       if (!day.assignment[s].some(v => v)) return false;                 // 既に1人目がいる時間帯に重ねる
       if (day.assignment[s][uIdx]) return false;
@@ -2200,7 +2211,7 @@ function autoAssignShifts(preserveManual, options) {
       users.forEach((user, uIdx) => {
         if (uIdx === soloIdx) return;
         if (users[uIdx].isAdmin || day.lockedCols[uIdx]) return;
-        if (day.userEvents[uIdx].some(ev => isAllDayEventSafe(ev))) return;
+        if (day.userEvents[uIdx].some(ev => shift_isAllDayEventSafe_(ev))) return;
         if (userDailySlots[dayIdx][uIdx] > 0) return;
 
         let s = 0;
@@ -2323,7 +2334,7 @@ function autoAssignShifts(preserveManual, options) {
       !users[uIdx].isAdmin &&
       !day.lockedCols[uIdx] &&
       !isUserInactiveForDay_(day, uIdx) &&
-      !day.userEvents[uIdx].some(ev => isAllDayEventSafe(ev)) &&
+      !day.userEvents[uIdx].some(ev => shift_isAllDayEventSafe_(ev)) &&
       remainingUserNeed(uIdx) > 0;
 
     const canTopUpCell = (day, dayIdx, uIdx, s, level, hardAvail, alreadyAdding) => {
@@ -2518,7 +2529,7 @@ function autoAssignShifts(preserveManual, options) {
         if (users[uIdx].isAdmin) return false;
         if (day.lockedCols[uIdx]) return false;
         if (isUserInactiveForDay_(day, uIdx)) return false;
-        if (day.userEvents[uIdx].some(ev => isAllDayEventSafe(ev))) return false;
+        if (day.userEvents[uIdx].some(ev => shift_isAllDayEventSafe_(ev))) return false;
         if (day.assignment[s][uIdx]) return false;
         if (!hardAvail[uIdx][s]) return false;
         if (isSpecialBlockedSlot(day, uIdx, s)) return false;
@@ -2625,7 +2636,7 @@ function autoAssignShifts(preserveManual, options) {
       !users[i].isAdmin &&
       !day.lockedCols[i] &&
       !isUserInactiveForDay_(day, i) &&
-      !day.userEvents[i].some(ev => isAllDayEventSafe(ev))
+      !day.userEvents[i].some(ev => shift_isAllDayEventSafe_(ev))
     ));
 
     for (let pass = 0; pass < maxPasses; pass++) {
@@ -3153,14 +3164,14 @@ function computeAvailabilityMatrix(users, day, timeSlots, bufferMinutes, ignoreE
       events = events.filter(ev => !eventTitleMatchesKeywords(ev, assignIgnoreKeywords));
     }
 
-    const hasAllDay = events.some(ev => isAllDayEventSafe(ev));
+    const hasAllDay = events.some(ev => shift_isAllDayEventSafe_(ev));
     if (hasAllDay) return timeSlots.map(() => false);
 
     const specialBlockedRanges = [];
     const normalBlockedRanges = [];
 
     events
-      .filter(ev => !isAllDayEventSafe(ev))
+      .filter(ev => !shift_isAllDayEventSafe_(ev))
       .forEach(ev => {
         const isSpecial = specialKeywords.length > 0 && eventTitleMatchesKeywords(ev, specialKeywords);
         const bufferMs = isSpecial ? Math.max(normalBufferMs, specialBufferMs) : normalBufferMs;
@@ -3219,7 +3230,7 @@ function computeSpecialBlockMatrix(users, day, timeSlots) {
     const ranges = [];
     events.forEach(ev => {
       if (!eventTitleMatchesKeywords(ev, keywords)) return;
-      if (isAllDayEventSafe(ev)) {
+      if (shift_isAllDayEventSafe_(ev)) {
         ranges.push({ start: Number.NEGATIVE_INFINITY, end: Number.POSITIVE_INFINITY });
         return;
       }
@@ -3247,7 +3258,8 @@ function isSpecialBlockedSlot(day, uIdx, slotIdx) {
 function parseEmailSet(raw) {
   const set = new Set();
   if (!raw) return set;
-  String(raw).split(/[,,;\s]+/).forEach(e => {
+  // 区切りは半角・全角のカンマ／読点／セミコロンと空白（キーワードの区切りと同じ扱い）。
+  String(raw).split(/[,、，;；\s]+/).forEach(e => {
     const t = e.trim().toLowerCase();
     if (t) set.add(t);
   });
@@ -3286,7 +3298,7 @@ function countBusySlotsForDay(user, events, day, timeSlots, isLunchSlot) {
   if (!events || events.length === 0) return 0;
 
   events.forEach(ev => {
-    if (isAllDayEventSafe(ev)) {
+    if (shift_isAllDayEventSafe_(ev)) {
       for (let s = 0; s < timeSlots.length; s++) {
         if (!isLunchSlot[s] && isWithinUserHours(timeSlots[s], user)) busy[s] = true;
       }
@@ -3326,7 +3338,7 @@ function selectDailyMainLeadIdx(users, day, dayIdx) {
       !users[idx].isAdmin &&
       !day.lockedCols[idx] &&
       !isUserInactiveForDay_(day, idx) &&
-      !day.userEvents[idx].some(ev => isAllDayEventSafe(ev))
+      !day.userEvents[idx].some(ev => shift_isAllDayEventSafe_(ev))
     );
 
   if (cands.length === 0) return -1;
@@ -3394,7 +3406,7 @@ function computeKeywordSlots(events, timeSlots, keywords, isLunchSlot) {
     const matched = keywords.some(kw => kw && lower.indexOf(kw) >= 0);
     if (!matched) return;
 
-    if (isAllDayEventSafe(ev)) {
+    if (shift_isAllDayEventSafe_(ev)) {
       for (let s = 0; s < numSlots; s++) hit[s] = true;
       return;
     }
@@ -3906,9 +3918,10 @@ function updateSettingsTotals(setSheet, users, dailySheetNames, timeSlots) {
 function saveShiftData(sheet) {
   const lastCol = sheet.getLastColumn();
   const lastRow = sheet.getLastRow();
-  if (lastRow < 1 || lastCol < 2) return { shifts: {}, locks: null };
+  if (lastRow < 1 || lastCol < 2) return { shifts: {}, locks: null, lockNames: null };
 
   let actualShiftCount = 0;
+  let shiftHeaderRow = 0;
   // 新形式は見出し2行目(行3)の「シフト」、旧形式は行2/行1の「シフト」を末尾から数える
   for (const headerRow of [3, 2, 1]) {
     if (headerRow > lastRow) continue;
@@ -3921,11 +3934,12 @@ function saveShiftData(sheet) {
       }
       if (count > 0) {
         actualShiftCount = count;
+        shiftHeaderRow = headerRow;
         break;
       }
     } catch (e) {}
   }
-  if (actualShiftCount === 0) return { shifts: {}, locks: null };
+  if (actualShiftCount === 0) return { shifts: {}, locks: null, lockNames: null };
 
   const shiftCol1 = lastCol - actualShiftCount + 1;
   const timeDisplayValues = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
@@ -3940,17 +3954,24 @@ function saveShiftData(sheet) {
   }
 
   let locks = null;
+  let lockNames = null;
   for (let r = 1; r <= Math.min(lastRow, 10); r++) {
     const label = sheet.getRange(r, 1).getDisplayValue().trim();
     if (label === 'ロック' || label.indexOf('ロック') >= 0) {
       try {
         locks = sheet.getRange(r, shiftCol1, 1, actualShiftCount).getValues()[0];
+        // ロックは本人名で復元する。新形式の日付シートはシフト列の見出し（2行目）が本人名。
+        // 見出し行がそれ以外（旧形式）の場合は名前が取れないので null のままにする。
+        if (shiftHeaderRow === 3) {
+          lockNames = sheet.getRange(2, shiftCol1, 1, actualShiftCount).getValues()[0]
+            .map(v => String(v || '').trim());
+        }
       } catch (e) {}
       break;
     }
   }
 
-  return { shifts: shiftMap, locks };
+  return { shifts: shiftMap, locks, lockNames };
 }
 
 function clearSheet(sheet) {
@@ -4004,13 +4025,45 @@ function restoreShiftData(sheet, users, timeSlots, savedData) {
     }
   }
 
+  const result = { droppedLocks: [], lockRestoreSkipped: false };
   if (Array.isArray(locks) && locks.length > 0) {
-    const lockValues = new Array(users.length).fill(false);
-    for (let c = 0; c < Math.min(locks.length, users.length); c++) {
-      lockValues[c] = locks[c] === true;
+    const lockNames = (savedData && Array.isArray(savedData.lockNames)) ? savedData.lockNames : null;
+    const plan = planLockRestore_(locks, lockNames, users.map(u => String(u.name || '').trim()));
+    result.droppedLocks = plan.dropped;
+    result.lockRestoreSkipped = plan.skipped;
+    if (!plan.skipped) {
+      sheet.getRange(LOCK_ROW, shiftCol1, 1, users.length).setValues([plan.lockValues]);
     }
-    sheet.getRange(LOCK_ROW, shiftCol1, 1, users.length).setValues([lockValues]);
   }
+  return result;
+}
+
+/**
+ * 保存していたロック（locks）を、新しいユーザー並び（userNames）へ復元する計画を立てる。
+ *  - 保存時の列見出し（lockNames）がある場合: 本人名で対応づける。いまのユーザーに居ない人の
+ *    ロックは復元できないので dropped に名前を入れる。
+ *  - 見出しが無い場合（旧形式）: 人数が同じときだけ位置で復元し、人数が違えば復元せず skipped。
+ * 返り値: { lockValues: boolean[], dropped: string[], skipped: boolean }
+ */
+function planLockRestore_(locks, lockNames, userNames) {
+  const lockValues = new Array(userNames.length).fill(false);
+  const dropped = [];
+  if (lockNames && lockNames.length === locks.length) {
+    const idxByName = {};
+    userNames.forEach((n, i) => { idxByName[n] = i; });
+    for (let c = 0; c < locks.length; c++) {
+      if (locks[c] !== true) continue;
+      const name = String(lockNames[c] || '').trim();
+      if (name && idxByName[name] !== undefined) lockValues[idxByName[name]] = true;
+      else dropped.push(name || `${c + 1}列目`);
+    }
+    return { lockValues, dropped, skipped: false };
+  }
+  if (locks.length === userNames.length) {
+    for (let c = 0; c < locks.length; c++) lockValues[c] = locks[c] === true;
+    return { lockValues, dropped, skipped: false };
+  }
+  return { lockValues, dropped, skipped: locks.some(v => v === true) };
 }
 
 function setupLayout(sheet, users, timeSlots, targetDate) {
@@ -4159,14 +4212,24 @@ function addDailyTotalsRow(sheet, users, timeSlots) {
   }
 }
 
+/**
+ * セルへ書く予定の題名を安全にする。= + - @ で始まる文字列は、先頭にアポストロフィを付けて
+ * 数式として評価されないようにする（Sheets ではアポストロフィは「文字列として入力」の印で、
+ * セルには表示されない）。
+ */
+function shift_safeCellText_(value) {
+  const s = (value === null || value === undefined) ? '' : String(value);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
 function fillAllEvents(sheet, users, allUserEvents, timeSlots) {
   users.forEach((user, userIdx) => {
     const col = userIdx + 2;
     const events = allUserEvents[userIdx];
 
     const sortedEvents = events.slice().sort((a, b) => {
-      const aAllDay = isAllDayEventSafe(a);
-      const bAllDay = isAllDayEventSafe(b);
+      const aAllDay = shift_isAllDayEventSafe_(a);
+      const bAllDay = shift_isAllDayEventSafe_(b);
       if (aAllDay === bAllDay) return 0;
       return aAllDay ? 1 : -1;
     });
@@ -4174,7 +4237,7 @@ function fillAllEvents(sheet, users, allUserEvents, timeSlots) {
     const slotData = new Array(timeSlots.length).fill(null);
 
     sortedEvents.forEach(event => {
-      if (isAllDayEventSafe(event)) {
+      if (shift_isAllDayEventSafe_(event)) {
         for (let i = 0; i < timeSlots.length; i++) {
           if (!slotData[i]) slotData[i] = event.getTitle();
         }
@@ -4203,7 +4266,7 @@ function fillAllEvents(sheet, users, allUserEvents, timeSlots) {
 
         const rowCount = j - i;
         const range = sheet.getRange(i + TIME_SLOT_START_ROW, col, rowCount, 1);
-        range.setValue(title)
+        range.setValue(shift_safeCellText_(title))
           .setBackground(user.bgColor)
           .setFontColor(user.fontColor)
           .setVerticalAlignment('middle')
@@ -4292,6 +4355,30 @@ function readUsers(setSheet) {
     startTime: parseTimeCell(userDisplayValues[idx][6]),  // G列: 開始時刻 (index 6)
     endTime: parseTimeCell(userDisplayValues[idx][7]),    // H列: 終了時刻 (index 7)
   })).filter(u => u.name && u.email && /@/.test(String(u.email)));
+}
+
+/**
+ * 時刻セルを「0:00 からの分」に変換する。表示値の h:mm / hh:mm（秒は無視）を優先し、
+ * 読めなければ Date（時刻のみのセルの値）または 0〜1 未満の数値（1 日に対する割合）を使う。
+ * 解釈できない・範囲外（時 0〜23、分 0〜59）は null。
+ */
+function timeCellToMinutes_(value, displayValue) {
+  const fromParts = (h, m) => (h >= 0 && h <= 23 && m >= 0 && m <= 59) ? h * 60 + m : null;
+  const re = /^(\d{1,2}):(\d{2})(?::\d{2})?$/;
+  const shown = (displayValue === null || displayValue === undefined) ? '' : String(displayValue).trim();
+  let m = shown.match(re);
+  if (m) return fromParts(parseInt(m[1], 10), parseInt(m[2], 10));
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return value.getHours() * 60 + value.getMinutes();
+  }
+  if (typeof value === 'number' && isFinite(value) && value >= 0 && value < 1) {
+    return Math.round(value * 1440) % 1440;
+  }
+  if (typeof value === 'string') {
+    m = value.trim().match(re);
+    if (m) return fromParts(parseInt(m[1], 10), parseInt(m[2], 10));
+  }
+  return null;
 }
 
 function parseTimeCell(displayValue) {
@@ -4428,7 +4515,7 @@ function sumArray(arr) {
   return s;
 }
 
-function isAllDayEventSafe(event) {
+function shift_isAllDayEventSafe_(event) {
   try { return event.isAllDayEvent(); } catch (e) { return false; }
 }
 
@@ -4443,10 +4530,20 @@ function generateTimeSlots(startStr, endStr) {
   return slots;
 }
 
+/**
+ * 予定の取得。取得できなかった場合（カレンダー未検出・権限エラーなど）は空配列を返すが、
+ * 「予定なし」と区別できるよう、失敗を __SHIFT_FETCH_ERRORS に記録する。
+ * 各メニューの入口で resetFetchErrors_() を呼び、終了時に formatFetchErrorMessage_() で
+ * 利用者へ表示する（自動割当は警告欄に出す）。
+ */
 function fetchEvents(email, date) {
+  const dateKey = Utilities.formatDate(date, 'JST', 'yyyy-MM-dd');
   try {
     const calendar = CalendarApp.getCalendarById(email);
-    if (!calendar) return [];
+    if (!calendar) {
+      recordFetchError_(email, dateKey, 'カレンダーが見つかりません（メールアドレスの誤り、または閲覧権限・共有設定がありません）');
+      return [];
+    }
     const start = new Date(date.setHours(0, 0, 0, 0));
     const end = new Date(date.setHours(23, 59, 59, 999));
     return calendar.getEvents(start, end).filter(ev => {
@@ -4456,7 +4553,41 @@ function fetchEvents(email, date) {
         return true;
       }
     });
-  } catch (e) { return []; }
+  } catch (e) {
+    recordFetchError_(email, dateKey, '予定の取得に失敗しました: ' + (e && e.message ? e.message : String(e)));
+    return [];
+  }
+}
+
+/** fetchEvents の失敗記録（実行中のみ有効。Apps Script は実行ごとにグローバルが初期化される）。 */
+let __SHIFT_FETCH_ERRORS = {};
+
+function resetFetchErrors_() { __SHIFT_FETCH_ERRORS = {}; }
+
+function recordFetchError_(email, dateKey, message) {
+  const key = String(email);
+  if (!__SHIFT_FETCH_ERRORS[key]) __SHIFT_FETCH_ERRORS[key] = { message: message, dates: new Set() };
+  __SHIFT_FETCH_ERRORS[key].dates.add(dateKey);
+}
+
+/** 取得失敗を「名前（メール）: 理由［N日分］」の配列にする。失敗が無ければ空配列。 */
+function getFetchErrorSummaries_(users) {
+  const nameByEmail = {};
+  (users || []).forEach(u => { nameByEmail[String(u.email)] = u.name; });
+  return Object.keys(__SHIFT_FETCH_ERRORS).map(key => {
+    const e = __SHIFT_FETCH_ERRORS[key];
+    const who = nameByEmail[key] ? `${nameByEmail[key]}（${key}）` : key;
+    return `${who}: ${e.message}［${e.dates.size}日分］`;
+  });
+}
+
+/** 完了ダイアログ用の文章。失敗が無ければ空文字。 */
+function formatFetchErrorMessage_(users) {
+  const list = getFetchErrorSummaries_(users);
+  if (list.length === 0) return '';
+  return '【予定を取得できなかったカレンダー】\n' +
+    '以下は「予定なし」ではなく取得失敗です。その人の予定は反映・考慮されていません。\n' +
+    list.map(t => '・' + t).join('\n');
 }
 
 function columnToLetter(col) {
@@ -4670,7 +4801,7 @@ function createSettingsSheet() {
     '   ・A: 名前, B: メール, C: 色, D: 予定人月\n' +
     '   ・E: 予定時間（手入力。F列の目安を参考に入力）\n' +
     '   ・G: 開始時刻, H: 終了時刻（空欄なら全日対象）\n' +
-    '3. メニュー「最新のカレンダー予定を反映（シフト保持）」を実行\n' +
+    '3. メニュー「① カレンダー予定を反映」を実行（既存シフトは保持されます）\n' +
     '4. シフトを空にしたい場合だけ、メニュー「シフト欄を初期化（全クリア）」を実行\n' +
     '5. メニュー「シフトを自動入力（空き枠のみ）」を実行\n\n' +
     '※ 一部の期間だけ組みなおしたい場合は、メニュー「指定期間だけ組みなおす」で開始日〜終了日を指定してください（範囲外の日は変更されません）\n' +
@@ -4888,7 +5019,7 @@ function createDocsSheet() {
     { type: 'text', text: '各日付シートのA1セルにチェックボックスがあります。ここにチェックを入れると、その日は「確定」扱いになります。' },
     { type: 'bullet', text: '確定日は自動シフト（空き枠のみ/全クリアどちらも）の対象から完全に外れる（触られない）' },
     { type: 'bullet', text: '確定日は「シフト欄を初期化（全クリア）」の対象からも外れる' },
-    { type: 'bullet', text: '確定日は「最新のカレンダー予定を反映」でも一切触らない（カレンダーの再取得もしない）' },
+    { type: 'bullet', text: '確定日は「① カレンダー予定を反映」でも一切触らない（カレンダーの再取得もしない）' },
     { type: 'bullet', text: 'チェックを外せば、その日はまた通常通り編集・自動シフトの対象に戻る' },
     { type: 'bullet', text: 'A1の背景色でも状態が分かる（未確定=青、確定=緑）' },
     { type: 'space' },
@@ -4946,8 +5077,15 @@ function createDocsSheet() {
     { type: 'bullet', text: '※カレンダー予定（シフト登録キーワード）から発生した重複は本人の実予定なのでそのまま残し、この上限の対象外とする' },
     { type: 'space' },
 
+    { type: 'h1', text: '■ 未対応の設定（キーワードルール／割当モード）' },
+    { type: 'text', text: '選択肢や列は用意されていますが、現在は動作に反映されないものがあります。' },
+    { type: 'bullet', text: '「キーワードルール」シート: 現在「設定へ反映」で反映されるのは 強制シフト／割当不可／終日除外 のみ。優先割当・低優先・重複許容は未対応（選んでも動作に影響しない）' },
+    { type: 'bullet', text: '「キーワードルール」シートの「前後バッファ分」「対象」列も未対応。割当不可・終日除外の前後は運用設定の「特別予定バッファ分」（既定60分）が全ルール共通で使われ、対象は本人のみ' },
+    { type: 'bullet', text: '運用設定の「割当モード」の「研修期」は予約済みの選択肢で、標準と同じ動作（安全優先・カバー優先・繁忙期だけが動作を変える）' },
+    { type: 'space' },
+
     { type: 'h1', text: '■ メニュー' },
-    { type: 'kv', k: '最新のカレンダー予定を反映（シフト保持）', v: 'カレンダーから予定取得→日付シート作成/更新。既存シフトは保持' },
+    { type: 'kv', k: '① カレンダー予定を反映', v: 'カレンダーから予定取得→日付シート作成/更新。既存シフトは保持' },
     { type: 'kv', k: 'シフト欄を初期化（全クリア）', v: 'カレンダー予定は残し、対象期間の日付シートのシフト欄とロック状態だけを初期化' },
     { type: 'kv', k: '集計のみ更新', v: '設定シートの集計だけ再計算（10時間未満強調も更新、F列「予定時間(目安)」も再計算）' },
     { type: 'kv', k: 'シフトを自動入力（空き枠のみ）', v: '手動シフトを保護して空き枠だけ自動で埋める' },
@@ -4966,7 +5104,7 @@ function createDocsSheet() {
     { type: 'numbered', text: 'F列に表示される「予定時間(目安)」を確認し、E列に運用したい目標時間を手入力' },
     { type: 'numbered', text: '必要なら「週次担当シートを作成/更新」で週ごとの主担当・稼働メンバーを入力' },
     { type: 'numbered', text: '必要なら「運用設定シートを作成/更新」で「自動割当: 予定無視キーワード」などを設定' },
-    { type: 'numbered', text: '「最新のカレンダー予定を反映（シフト保持）」を実行（日付シートが生成/更新される。既存シフトは保持）' },
+    { type: 'numbered', text: '「① カレンダー予定を反映」を実行（日付シートが生成/更新される。既存シフトは保持）' },
     { type: 'numbered', text: 'シフトを一度空にしたい場合だけ「シフト欄を初期化（全クリア）」を実行' },
     { type: 'numbered', text: '「除外日」シートを確認し、必要なら任意日を追加' },
     { type: 'numbered', text: '「シフトを自動入力（空き枠のみ）」を実行' },
@@ -5132,7 +5270,7 @@ function createOperationSettingsSheet() {
 
   const rows = [
     ['項目', '値', '説明'],
-    ['割当モード', val('割当モード', '標準'), '安全優先 / 標準 / カバー優先 / 繁忙期 / 研修期'],
+    ['割当モード', val('割当モード', '標準'), '安全優先 / 標準 / カバー優先 / 繁忙期 / 研修期。※研修期は予約済みの選択肢で、現在は標準と同じ動作です'],
     ['昼休み開始', val('昼休み開始', LUNCH_START), 'HH:mm。自動割当・集計から除外する休憩開始時刻'],
     ['昼休み終了', val('昼休み終了', LUNCH_END), 'HH:mm。自動割当・集計から除外する休憩終了時刻'],
     ['予定前後バッファ分', val('予定前後バッファ分', EVENT_BUFFER_MINUTES), '通常予定の前後を何分避けるか'],
@@ -5330,7 +5468,19 @@ function createKeywordRulesSheet() {
   sheet.setColumnWidths(1, 6, 140);
   sheet.setColumnWidth(6, 360);
   sheet.getRange(1, 1, Math.max(100, rows.length), 6).setWrap(true).setVerticalAlignment('middle');
+  // 実装されている範囲を見出しの注記で明示する（挙動は変えない）。
+  sheet.getRange(1, 3).setNote(KEYWORD_RULES_SUPPORT_NOTE);
+  sheet.getRange(1, 4).setNote(KEYWORD_RULES_SUPPORT_NOTE);
+  sheet.getRange(1, 5).setNote(KEYWORD_RULES_SUPPORT_NOTE);
 }
+
+/** キーワードルールシートの対応状況（見出し注記・反映時の案内・使い方シートで共通に使う）。 */
+const KEYWORD_RULES_SUPPORT_NOTE =
+  '現在「設定へ反映」で反映されるのは、動作が 強制シフト／割当不可／終日除外 のルールだけです。\n' +
+  '・優先割当／低優先／重複許容 は未対応です（選んでも動作に影響しません）。\n' +
+  '・「前後バッファ分」「対象」列は未対応です。割当不可・終日除外の前後は、運用設定シートの「特別予定バッファ分」（既定60分）が全ルール共通で使われ、対象は常に本人です。';
+
+const KEYWORD_RULES_SUPPORTED_ACTIONS = ['強制シフト', '割当不可', '終日除外'];
 
 function readKeywordRules_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -5371,7 +5521,16 @@ function syncKeywordRulesToSettings() {
   });
   if (force.length > 0) setSheet.getRange(SHIFT_KEYWORD_CELL).setValue(uniqueStrings_(force).join(','));
   if (block.length > 0) setSheet.getRange(SPECIAL_BLOCK_KEYWORD_CELL).setValue(uniqueStrings_(block).join(','));
-  SpreadsheetApp.getUi().alert(`キーワードルールを設定へ反映しました。\n強制シフト: ${force.length}件\n前後ブロック: ${block.length}件`);
+  let msg = `キーワードルールを設定へ反映しました。\n強制シフト: ${force.length}件\n前後ブロック: ${block.length}件`;
+  const unsupported = rules.filter(r => KEYWORD_RULES_SUPPORTED_ACTIONS.indexOf(r.action) < 0);
+  if (unsupported.length > 0) {
+    msg += `\n\n未対応の動作のため反映されなかったルール: ${unsupported.length}件（${uniqueStrings_(unsupported.map(r => r.action)).join('、')}）`;
+  }
+  if (rules.some(r => KEYWORD_RULES_SUPPORTED_ACTIONS.indexOf(r.action) >= 0 && (r.bufferMinutes || (r.target && r.target !== '本人')))) {
+    msg += '\n\n「前後バッファ分」「対象」列は反映されません（運用設定の「特別予定バッファ分」が全ルール共通で使われ、対象は本人のみです）。';
+  }
+  msg += '\n\n現在反映されるのは 強制シフト／割当不可／終日除外 のみです。';
+  SpreadsheetApp.getUi().alert(msg);
 }
 
 function createUserAttributesSheet() {
@@ -5646,6 +5805,7 @@ function createShortageReport() {
     SpreadsheetApp.getUi().alert(ctx.message);
     return;
   }
+  resetFetchErrors_();
   const rows = buildShortageRows_(ctx);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHORTAGE_REPORT_SHEET_NAME);
@@ -5670,7 +5830,8 @@ function createShortageReport() {
   sheet.setColumnWidth(6, 280);
   sheet.setColumnWidth(7, 360);
   sheet.getRange(1, 1, Math.max(sheet.getLastRow(), 1), header.length).setWrap(true).setVerticalAlignment('middle');
-  SpreadsheetApp.getUi().alert(`不足日レポートを作成しました。\n不足日: ${rows.length}件`);
+  const fetchErrorMsg = formatFetchErrorMessage_(ctx.users);
+  SpreadsheetApp.getUi().alert(`不足日レポートを作成しました。\n不足日: ${rows.length}件` + (fetchErrorMsg ? '\n\n' + fetchErrorMsg + '\n追加候補は、この人の予定を考慮していません。' : ''));
 }
 
 function buildShortageRows_(ctx) {
@@ -5753,12 +5914,16 @@ function fillShortageOnlySafely() {
     ui.alert(ctx.message);
     return;
   }
+  resetFetchErrors_();
   const rows = buildShortageRows_(ctx);
   if (rows.length === 0) {
     ui.alert('不足日はありません。');
     return;
   }
-  const res = ui.alert('確認', `${rows.length}件の不足日を、候補者の空き枠にだけ安全に補填します。既存シフト・ロック列は変更しません。続行しますか？`, ui.ButtonSet.OK_CANCEL);
+  const fetchErrorBefore = formatFetchErrorMessage_(ctx.users);
+  const res = ui.alert('確認', `${rows.length}件の不足日を、候補者の空き枠にだけ安全に補填します。既存シフト・ロック列は変更しません。` +
+    (fetchErrorBefore ? '\n\n' + fetchErrorBefore + '\n取得できなかった人は予定なしとして補填されます。' : '') +
+    '\n\n続行しますか？', ui.ButtonSet.OK_CANCEL);
   if (res !== ui.Button.OK) return;
 
   const backupId = createShiftBackupNow_('不足補填前バックアップ', { silent: true });
@@ -5786,6 +5951,7 @@ function fillShortageOnlySafely() {
       existingShifts: shift,
       lockedCols: lockInfo.lockedCols,
       specialBlockKeywords,
+      assignment: shift, // 同時禁止相手の判定（slotHasForbiddenPartnerFor_）が参照する。補填のたびに更新される。
     };
     applyWeeklyConfigToDay_(day, weeklyCfg, ctx.users);
     day.specialBlocked = computeSpecialBlockMatrix(ctx.users, day, ctx.timeSlots);
@@ -5817,9 +5983,11 @@ function fillShortageOnlySafely() {
         if (shift[s][uIdx]) continue;
         if (!availability[uIdx][s]) continue;
         if (isSpecialBlockedSlot(day, uIdx, s)) continue;
+        // 同時禁止相手・同時刻の人数上限は、自動割当本体（canAssign）と同じ関数・設定で判定する。
+        if (slotHasForbiddenPartnerFor_(day, uIdx, s, ctx.users)) continue;
         let otherCount = 0;
         for (let c = 0; c < ctx.users.length; c++) if (shift[s][c]) otherCount++;
-        if (otherCount >= 2) continue;
+        if (otherCount >= getMaxSameTimePeople_()) continue;
         shift[s][uIdx] = ctx.users[uIdx].name;
         dayTotal++;
         filledSlots++;
@@ -5838,7 +6006,9 @@ function fillShortageOnlySafely() {
     updateSettingsTotals(ctx.setSheet, ctx.users, ctx.dailySheetNames, ctx.timeSlots);
     appendGenericHistory_('不足補填', '', '', '', '', `${filledDays}日 / ${(filledSlots / 4).toFixed(2)}h`, backupId);
   }
-  ui.alert(`不足補填が完了しました。\n対象日: ${filledDays}日\n追加: ${(filledSlots / 4).toFixed(2)}h\n\n週次担当で非稼働のメンバーは対象外にしています。`);
+  const fetchErrorAfter = formatFetchErrorMessage_(ctx.users);
+  ui.alert(`不足補填が完了しました。\n対象日: ${filledDays}日\n追加: ${(filledSlots / 4).toFixed(2)}h\n\n週次担当で非稼働のメンバーは対象外にしています。` +
+    (fetchErrorAfter ? '\n\n' + fetchErrorAfter : ''));
 }
 
 function validateSettings() {
@@ -5856,11 +6026,13 @@ function validateSettings() {
   if (!(startDateVal instanceof Date) || isNaN(new Date(startDateVal).getTime())) issues.push('A2（開始日）が日付として認識できません。');
   const daysToFetch = Number(setSheet.getRange('B2').getValue());
   if (!daysToFetch || daysToFetch <= 0) issues.push('B2（取得日数）が未設定、または0以下です。');
-  const startTimeStr = setSheet.getRange('C2').getDisplayValue();
-  const endTimeStr = setSheet.getRange('D2').getDisplayValue();
-  if (!/^\d{1,2}:\d{2}$/.test(startTimeStr) || !/^\d{1,2}:\d{2}$/.test(endTimeStr)) {
+  // 表示値は h:mm 書式だと「9:00」になり、文字列のまま比較すると「9:00」>「18:00」と誤判定される。
+  // 文字列（h:mm）と Date／数値（シリアル値）のどちらでも、分単位の数値にして比較する。
+  const startMinutes = timeCellToMinutes_(setSheet.getRange('C2').getValue(), setSheet.getRange('C2').getDisplayValue());
+  const endMinutes = timeCellToMinutes_(setSheet.getRange('D2').getValue(), setSheet.getRange('D2').getDisplayValue());
+  if (startMinutes === null || endMinutes === null) {
     issues.push('C2（開始時刻）またはD2（終了時刻）の形式が不正です。');
-  } else if (startTimeStr >= endTimeStr) {
+  } else if (startMinutes >= endMinutes) {
     issues.push('C2（開始時刻）がD2（終了時刻）以降になっています。');
   }
   const monthlyTargetHours = parseHoursValue(setSheet.getRange(MONTHLY_TARGET_CELL));
@@ -6149,7 +6321,7 @@ function countShiftEventConflicts_(users, dateStr, shift, timeSlots, isLunchSlot
       const slotStart = parseSlotTime(date, timeSlots[s]).getTime();
       const slotEnd = slotStart + 15 * 60 * 1000;
       const hit = events.find(ev => {
-        if (isAllDayEventSafe(ev)) return true;
+        if (shift_isAllDayEventSafe_(ev)) return true;
         let es, ee;
         try { es = ev.getStartTime().getTime(); ee = ev.getEndTime().getTime(); } catch (e) { return false; }
         return slotStart < ee && slotEnd > es;
@@ -6371,7 +6543,7 @@ function selectDailyMainLeadIdxWithWeek_(users, day, dayIdx) {
       if (users[idx].isAdmin) continue;
       if (day.lockedCols && day.lockedCols[idx]) continue;
       if (isUserInactiveForDay_(day, idx)) continue;
-      if (day.userEvents && day.userEvents[idx] && day.userEvents[idx].some(ev => isAllDayEventSafe(ev))) continue;
+      if (day.userEvents && day.userEvents[idx] && day.userEvents[idx].some(ev => shift_isAllDayEventSafe_(ev))) continue;
       return idx;
     }
     // 週次担当の主担当が全員その日入れない場合は、通常ロジックへフォールバックする。

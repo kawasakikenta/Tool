@@ -3,17 +3,17 @@
 この資料は、`tool` の核心設計（アーキテクチャと主要な設計判断）と安全性設計、および実装上の判定条件・閾値・正規表現を、正規ソース `index.html`・`CalendarToSheet.gs`・`Shift.gs` の実装から抜き出してまとめたものです。利用者向けの説明は [README.md](../README.md) を正本とし、本資料は実装側の判定条件を補います。
 
 - 対象: main（コミット `878a7c0` 時点）
-- 更新日: 2026-10-21
+- 更新日: 2026-10-22
 
 ## 1. 概要と読み方
 
 このリポジトリには、互いに依存しない 3 本のツールが置かれている。
 
-1. `index.html`（2,386 行）: 「かんたん業務フロー作成」。「図で編集」とテキスト記法の両方で、担当者・部署ごとのスイムレーン型業務フロー図とシーケンス図を作る単独 HTML ツール。ビルドも外部 CDN も持たず、ブラウザで開くだけで動く。
-2. `CalendarToSheet.gs`（638 行）: Google Apps Script。Google カレンダーの予定を時間割形式でスプレッドシートへ転記する。
-3. `Shift.gs`（6,495 行）: Google Apps Script。複数メンバーのカレンダー予定を読み、日付シートへ 15 分スロット単位でシフトを自動割り当てする大規模スクリプト。
+1. `index.html`（2,408 行）: 「かんたん業務フロー作成」。「図で編集」とテキスト記法の両方で、担当者・部署ごとのスイムレーン型業務フロー図とシーケンス図を作る単独 HTML ツール。ビルドも外部 CDN も持たず、ブラウザで開くだけで動く。
+2. `CalendarToSheet.gs`（730 行）: Google Apps Script。Google カレンダーの予定を時間割形式でスプレッドシートへ転記する。
+3. `Shift.gs`（6,667 行）: Google Apps Script。複数メンバーのカレンダー予定を読み、日付シートへ 15 分スロット単位でシフトを自動割り当てする大規模スクリプト。
 
-本資料は `index.html` の判定条件を最も詳しく、`CalendarToSheet.gs` を全体、`Shift.gs` を設定・可用性判定・割当パイプラインの核心に絞って扱う。`Shift.gs` で読み切れなかった領域は「9. 既知の制約と資料との食い違い」に明記する。README は `index.html` の利用説明のみで、`.gs` の 2 本には言及していない。
+本資料は `index.html` の判定条件を最も詳しく、`CalendarToSheet.gs` を全体、`Shift.gs` を設定・可用性判定・割当パイプラインの核心に絞って扱う。`Shift.gs` で読み切れなかった領域は「9. 既知の制約と資料との食い違い」に明記する。README には `index.html` に加えて `CalendarToSheet.gs`、`Shift.gs` の用途・設定・メニューと、2 本を同じプロジェクトに入れるときの注意（`onOpen` の衝突、日付名シートの衝突）を載せている。
 
 | 知りたいこと | 正本（リポジトリ内） |
 | --- | --- |
@@ -73,7 +73,7 @@ flowchart TB
 | 自動配置と手動配置の併存 | 階層（level）とレーン内スロットで自動配置し、ドラッグで保存した座標があるノードだけ上書きする。向きごとに別保存 | `layout`、`moveVisualNode`、`resetPositions` |
 | データはブラウザ内で完結 | 画像は IndexedDB、本文は localStorage。持ち運びは `.board.json`。画像を外部へ送らない | `storageSet`、`openAssetDatabase`、`saveBoardBtn` |
 | 取り込みでコードを実行しない | シーケンス HTML の取り込みは専用の小さなリテラル解析器で、式・関数呼び出しを拒否する | `seqParseDataLiteral`、`importSequenceHtml` |
-| 2 本の `.gs` は独立 | 定数は `CTS_` 接頭辞、補助関数は末尾 `_` で分けるが、`onOpen` と `isAllDayEventSafe` は両ファイルに同名で存在する | `CalendarToSheet.gs`、`Shift.gs` |
+| 2 本の `.gs` は独立 | 定数は `CTS_` 接頭辞で分け、`isAllDayEventSafe` 系の補助関数は `cts_isAllDayEventSafe_`、`shift_isAllDayEventSafe_` とファイル別の名前にしてある。名前が重なるのは Apps Script のトリガー名である `onOpen` だけで、別々のプロジェクトで使うか、`onOpen` を 1 つに統合して使う（README） | `CalendarToSheet.gs`、`Shift.gs` |
 | シフトは「本人の列」だけに入る | 日付シートはユーザー数 N に対し、予定列 N とシフト列 N（先頭シフト列は N+2 列目）。各シフト列は 1 人専用 | `setupLayout`、`fillUserShift`、`canAssign` |
 
 ## 3. 主要モジュールと責務
@@ -82,19 +82,19 @@ flowchart TB
 
 | 範囲（行番号は目安） | 責務 | 主な関数・定数 |
 | --- | --- | --- |
-| 8〜179 | CSS | `:root`、`.app`、`.edge-dialog` ほか |
-| 181〜339 | 画面の骨格とダイアログ 4 種 | `#source`、`#diagram`、`#edgeDialog`、`#textDialog`、`#embedDialog`、`#seqPeopleDialog` |
-| 342〜383 | アイコン定義、サンプル文、配色テーマ、状態変数 | `icons`、`examples`、`themes` |
-| 384〜442 | 永続化・履歴・入力補助 | `storageGet`、`storageSet`、`saveDraft`、`commitDocument`、`restoreHistory`、`insertPart` |
-| 443〜445 | エスケープと文字の折り返し | `escapeHtml`、`escapeAttr`、`svgText` |
-| 447〜1097 | シーケンス図のデータモデル | `normalizeSequence`、`seqValidateStrictSequence`、`seqParseDataLiteral`、`importSequenceHtml`、`seedSequence` |
-| 1098〜1133 | メディアカードと持ち運びボードの検証 | `safeMediaUrl`、`normalizeMedia`、`resizeMedia`、`validateBoard` |
-| 1134〜1404 | フロー図のモデル（解析・編集・配置・経路） | `readSettings`、`writeSettings`、`readNode`、`flowParts`、`parse`、`removeFromFlow`、`layout`、`shouldShorten`、`routeConnections` |
-| 1410〜2001 | シーケンス図の SVG 描画（DOM 非依存） | `renderSequenceDiagram`、`seqWrap`、`seqEscape`、`seqTheme` |
-| 2002〜2182 | 描画本体と編集ダイアログ、ドラッグ、キー操作 | `render`、`activateDiagram`、`applyDiagramText`、`finishDrag` |
-| 2183〜2204 | 出力 | `exportSvg`、`downloadBtn`、`pngBtn` |
-| 2205〜2320 | 画像・リンクカード、ボード保存と読込 | `openAssetDatabase`、`prepareImage`、`addImages`、`addEmbed`、`renderMediaCards`、`importBoardFile` |
-| 2322〜2384 | シーケンス編集 UI と共有 HTML | `sequenceReference`、`switchDiagram`、`buildShareHtml` |
+| 8〜180 | CSS | `:root`、`.app`、`.edge-dialog` ほか |
+| 182〜341 | 画面の骨格とダイアログ 4 種 | `#source`、`#diagram`、`#edgeDialog`、`#textDialog`、`#embedDialog`、`#seqPeopleDialog` |
+| 344〜385 | アイコン定義、サンプル文、配色テーマ、状態変数 | `icons`、`examples`、`themes` |
+| 386〜444 | 永続化・履歴・入力補助 | `storageGet`、`storageSet`、`saveDraft`、`commitDocument`、`restoreHistory`、`insertPart` |
+| 445〜447 | エスケープと文字の折り返し | `escapeHtml`、`escapeAttr`、`svgText` |
+| 449〜1099 | シーケンス図のデータモデル | `normalizeSequence`、`seqValidateStrictSequence`、`seqParseDataLiteral`、`importSequenceHtml`、`seedSequence` |
+| 1100〜1135 | メディアカードと持ち運びボードの検証 | `safeMediaUrl`、`normalizeMedia`、`resizeMedia`、`validateBoard` |
+| 1136〜1423 | フロー図のモデル（解析・編集・配置・経路） | `parseSettingsLine`、`invalidSettingsLines`、`settingsWarning`、`readSettings`、`writeSettings`、`readNode`、`flowParts`、`parse`、`removeFromFlow`、`layout`、`shouldShorten`、`routeConnections` |
+| 1429〜2020 | シーケンス図の SVG 描画（DOM 非依存） | `renderSequenceDiagram`、`seqWrap`、`seqEscape`、`seqTheme` |
+| 2021〜2204 | 描画本体と編集ダイアログ、ドラッグ、キー操作 | `syncSettingsWarning`、`render`、`activateDiagram`、`applyDiagramText`、`finishDrag` |
+| 2205〜2226 | 出力 | `exportSvg`、`downloadBtn`、`pngBtn` |
+| 2227〜2342 | 画像・リンクカード、ボード保存と読込 | `openAssetDatabase`、`prepareImage`、`addImages`、`addEmbed`、`renderMediaCards`、`importBoardFile` |
+| 2344〜2406 | シーケンス編集 UI と共有 HTML | `sequenceReference`、`switchDiagram`、`buildShareHtml` |
 
 ### 3.2 CalendarToSheet.gs
 
@@ -104,7 +104,9 @@ flowchart TB
 | `createCalendarConfigSheet` | 設定シート `カレンダー設定` を作成。既存があれば確認ダイアログ後に初期化 |
 | `readCalendarConfig_` / `readCalendarUsers_` | 設定の読み取りと検証、取得対象ユーザーの読み取り |
 | `extractCalendarToSheet` | 本体。日 × ユーザーで予定を取得し、シートへ出力 |
-| `fetchEvents_` / `buildSlotData_` | 1 日分の予定取得、時間スロットへの割り付け |
+| `fetchEvents_` / `buildSlotData_` | 1 日分の予定取得（`{events, error}` を返し、失敗を `error` で区別する）、時間スロットへの割り付け |
+| `recordFetchError_` / `formatFetchErrors_` | 取得失敗をメール単位で集計し、完了ダイアログ・ログ用の文章にする |
+| `timeOrDefault_` / `stepOrDefault_` / `cts_safeCellText_` | 不正な時刻・刻みを既定値にして理由を残す、題名の先頭が `= + - @` なら先頭にアポストロフィを付ける |
 | `writeVertical_` / `writeHorizontal_` / `mergeAndColorRuns_` / `clearOutputArea_` | 出力レイアウトと前回出力の消去 |
 
 ### 3.3 Shift.gs
@@ -113,16 +115,16 @@ flowchart TB
 | --- | --- | --- |
 | 1〜125 | 定数（セル位置、列番号、既定値） | `BREAK_HOURS`、`LUNCH_START`、`MAX_PEOPLE_PER_DAY`、`LOCK_ROW`、`TIME_SLOT_START_ROW` |
 | 127〜283 | メニューと期間指定の再割当 | `onOpen`、`autoAssignShiftsRange`、`parseInputDate_` |
-| 286〜540 | シフト欄の初期化、カレンダー反映、集計 | `initializeShiftCellsOnly`、`updateTeamCalendarSheets`、`updateSettingsTotalsOnly` |
-| 541〜923 | 空き時間の抽出（4 区分） | `extractFreeTimeCore_`、`FREE_TIME_TYPES` |
-| 932〜3137 | 自動割当の本体（約 2,200 行のパイプライン） | `autoAssignShifts` |
-| 3139〜3512 | 可用性・主担当・キーワード・1 人分の割当 | `computeAvailabilityMatrix`、`computeSpecialBlockMatrix`、`selectDailyMainLeadIdx`、`fillUserShift`、`canAssign` |
-| 3514〜4220 | 確定フラグ、除外日、集計、日付シートの描画 | `isDayConfirmed_`、`writeAssignmentsToSheet`、`autoPopulateExcludedDates`、`updateSettingsTotals`、`saveShiftData`、`restoreShiftData`、`setupLayout`、`fillAllEvents` |
-| 4222〜4470 | 手動編集の色付け、ユーザー読み込み、時刻・時間数の解析 | `onEdit`、`readUsers`、`parseTimeCell`、`parseHoursValue`、`fetchEvents` |
-| 5088〜5300 | 運用設定シートと割当モード | `getOperationConfig_`、`buildStrictnessLevels_` |
-| 5305〜5555 | キーワードルール、ユーザー属性（同時禁止・単独禁止） | `readKeywordRules_`、`readUserAttributes_`、`getForbiddenPartnersMap_` |
-| 5556〜5960 | 変更履歴、バックアップ、不足日レポート、補填、設定チェック | `appendAutoAssignChangeLog_`、`createShiftBackupNow_`、`buildShortageRows_`、`fillShortageOnlySafely`、`validateSettings` |
-| 6198〜6495 | 週次担当（週ごとの主担当・稼働メンバー） | `readWeeklyAssignments_`、`applyWeeklyConfigToDay_`、`createWeeklyAssignmentSheet` |
+| 286〜553 | シフト欄の初期化、カレンダー反映、集計 | `initializeShiftCellsOnly`、`updateTeamCalendarSheets`、`updateSettingsTotalsOnly` |
+| 554〜936 | 空き時間の抽出（4 区分） | `extractFreeTimeCore_`、`FREE_TIME_TYPES` |
+| 945〜3148 | 自動割当の本体（約 2,200 行のパイプライン） | `autoAssignShifts` |
+| 3150〜3524 | 可用性・主担当・キーワード・1 人分の割当 | `computeAvailabilityMatrix`、`computeSpecialBlockMatrix`、`selectDailyMainLeadIdx`、`fillUserShift`、`canAssign` |
+| 3526〜4283 | 確定フラグ、除外日、集計、日付シートの描画 | `isDayConfirmed_`、`writeAssignmentsToSheet`、`autoPopulateExcludedDates`、`updateSettingsTotals`、`saveShiftData`、`restoreShiftData`、`setupLayout`、`fillAllEvents` |
+| 4285〜4601 | 手動編集の色付け、ユーザー読み込み、時刻・時間数の解析、予定の取得 | `onEdit`、`readUsers`、`timeCellToMinutes_`、`parseTimeCell`、`parseHoursValue`、`fetchEvents`、`recordFetchError_` |
+| 5226〜5438 | 運用設定シートと割当モード | `getOperationConfig_`、`buildStrictnessLevels_` |
+| 5443〜5714 | キーワードルール、ユーザー属性（同時禁止・単独禁止） | `readKeywordRules_`、`readUserAttributes_`、`getForbiddenPartnersMap_` |
+| 5715〜6132 | 変更履歴、バックアップ、不足日レポート、補填、設定チェック | `appendAutoAssignChangeLog_`、`createShiftBackupNow_`、`buildShortageRows_`、`fillShortageOnlySafely`、`validateSettings` |
+| 6370〜6667 | 週次担当（週ごとの主担当・稼働メンバー） | `readWeeklyAssignments_`、`applyWeeklyConfigToDay_`、`createWeeklyAssignmentSheet` |
 
 ## 4. 主要な処理の流れ
 
@@ -273,7 +275,7 @@ flowchart TB
 | `connections` | 要素が `from`、`to`、`label`（文字列）と `mode`（`line` または `jump`）を持つものだけ残す |
 | `nodes[].color` | `blue`、`green`、`orange`、`purple`、`pink` 以外は `auto` |
 | `nodes[].positions` | `horizontal`、`vertical` ごとに `flow`、`cross` が有限数のときだけ採用 |
-| JSON が壊れている | `try/catch` で無視し、その行は無かった扱い（設定は既定値に戻る。通知なし） |
+| JSON が壊れている | `parseSettingsLine` が、JSON として読めない行、またはオブジェクトでない行を「壊れた設定行」と判定する。`readSettings` はその行を無かった扱いにして設定を既定値で読むが、`render` が `settingsWarning`（行番号つきの文言）を画面上部の警告帯 `#settingsWarning` とコンソールに出す。`writeSettings` は読み取れた設定行だけを新しい 1 行に置き換え、壊れた行は削除せず本文に残す（保存し直しても元のデータは失われない） |
 
 | 保存先 | キー・名前 | 内容と失敗時の扱い |
 | --- | --- | --- |
@@ -379,8 +381,8 @@ HTML エンティティ: /&(?:amp|lt|gt|quot|apos|#39|#x[0-9a-f]+|#[0-9]+);/gi
 | 貼り付け開始セル（B3） | 大文字化し `parseA1_`（(G) を参照） | 空は `A1`。不正は `「貼り付け開始セル」が不正です` |
 | 向き（B4） | (G) の `横`、`よこ`、`horizontal` に一致で `横`、それ以外は `縦` | 未入力は `縦` |
 | 期間開始日・終了日（B5、B6） | `parseDateCell_`: `yyyy-MM-dd` または `yyyy/MM/dd` 形式を先頭一致、なければ `new Date(s)` で解釈 | 解釈不能は `yyyy-MM-dd 形式で入力してください`。終了日が開始日より前なら `「期間終了日」は「期間開始日」以降にしてください。` |
-| 開始・終了時刻（B7、B8） | `parseTimeStr_`: 時 0〜23、分 0〜59 | 不正は黙って `09:00`、`18:00` に置換 |
-| 時間刻み（B9） | `parseInt` の結果が偽なら 15（(G) を参照） | 不正・0 は 15。`generateTimeSlots_` は 0 以下も 15 に戻す |
+| 開始・終了時刻（B7、B8） | `timeOrDefault_`（`parseTimeStr_`: 時 0〜23、分 0〜59） | 不正・未入力は `09:00`、`18:00` に置換し、理由を `notices` に残して実行前に `設定の確認` ダイアログ（OK / キャンセル）で示す |
+| 時間刻み（B9） | `stepOrDefault_`: `parseInt` の結果が 1 以上でなければ 15（(G) を参照）。`generateTimeSlots_` も 0 以下を 15 に戻す | 不正・0・負・未入力は 15 とし、開始・終了時刻と同じダイアログで示す |
 | 終日予定の取得（B10） | (G) の `しない`、`no`、`false` のいずれかに一致しなければ取得する | 未入力は取得する |
 | 出力方法（B11） | (G) の `まとめ`、`1シート`、`一シート`、`together`、`single` に一致すれば 1 シート、それ以外は日付ごとに分割 | 未入力は日付ごとに分割 |
 | 時間帯が空 | `generateTimeSlots_` の結果が 0 件（終了が開始以前など） | `設定エラー` のダイアログを出して中止 |
@@ -396,21 +398,22 @@ HTML エンティティ: /&(?:amp|lt|gt|quot|apos|#39|#x[0-9a-f]+|#[0-9]+);/gi
 時刻文字列:      /^(\d{1,2}):(\d{2})/
 A1 形式:         /^([A-Z]+)(\d+)$/
 対象行の判定:    /@/.test(email)
-時間刻みの解析:  parseInt(get(9), 10) || 15
+時間刻みの解析:  parseInt(get(9), 10) > 0 ? その値 : 15   （stepOrDefault_）
 ```
 
 | 処理の判定 | 実装 | 結果 |
 | --- | --- | --- |
-| 予定の取得 | `fetchEvents_`: `CalendarApp.getCalendarById(email)`。その日の 00:00:00.000〜23:59:59.999。出欠が `NO`（辞退）の予定は除外 | カレンダーが見つからない、または例外なら空配列 |
+| 予定の取得 | `fetchEvents_`: `CalendarApp.getCalendarById(email)`。その日の 00:00:00.000〜23:59:59.999。出欠が `NO`（辞退）の予定は除外 | `{events, error}` を返す。カレンダーが見つからない、または例外なら `events` は空配列で `error` に理由（呼び出し側が `recordFetchError_` で集計し、完了ダイアログとログに「名前（メール）・理由・失敗日数」を出す） |
 | スロット割り付け | `buildSlotData_`: `HH:mm` 文字列を JST で作り、`startIdx = 最初の t >= 開始`、`endIdx = 最初の t >= 終了`。同じスロットに複数の予定があれば先に処理した予定を優先 | 開始がスロットの途中なら次のスロットから、終了が途中なら手前のスロットまで |
 | 時間帯の外 | 開始が最後のスロットより後なら無視。終了が時間帯より後なら最後まで | 時間帯より前に始まる予定は先頭から |
 | 日をまたぐ予定 | 終了の `HH:mm` が開始より小さいと `endIdx <= startIdx` になり、`for` が回らない | 表示されない（コード上の挙動） |
-| 終日予定 | `isAllDayEventSafe_`。`fetchAllDay` が真なら題名を ` / ` で連結して専用欄へ、偽なら捨てる | 時間スロットには入れない |
+| 終日予定 | `cts_isAllDayEventSafe_`。`fetchAllDay` が真なら題名を ` / ` で連結して専用欄へ、偽なら捨てる | 時間スロットには入れない |
 | タイトル | `getTitle()` が例外または空 | `(予定)` |
+| 題名の数式対策 | `cts_safeCellText_`: 先頭が `=`、`+`、`-`、`@` の題名（時間スロットの題名と、連結した終日予定の文字列）の先頭にアポストロフィを付ける | セルへは文字列として書かれ、数式として評価されない（実機での表示は未検証。7 章） |
 | 連続セルの連結 | `mergeAndColorRuns_`: 同じ題名が連続するセルを 1 つに結合し、ユーザー色を付ける | 異なる予定が同題名で連続すると 1 つに結合される |
 | 出力前の消去 | `clearOutputArea_`: 出力予定の行数 + 2、列数を、シートの最大行列に収まる範囲で `breakApart` と `clear` | 貼り付け先シートが無ければ `insertSheet` |
 | 日付ごとの分割 | シート名は `daySheetName_`（JST の `yyyy-MM-dd`）。既存の同名シートは再利用して上書き | 追加の確認ダイアログは出ない |
-| 完了表示 | `ui.alert('完了', ...)` に出力方法・向き・期間（日数）・終日予定・対象人数・作成シート名を列挙 | 取得失敗や欠落の件数は表示しない（9 章） |
+| 完了表示 | `ui.alert` に出力方法・向き・期間（日数）・時間帯と刻み・終日予定・対象人数・作成シート名を列挙。取得失敗があれば題名を `完了（取得できなかったカレンダーあり）` にし、`formatFetchErrors_` の文章を続ける | 取得できなかった日の件数は `失敗日数/期間日数` で示す。予定が無かっただけの日とは区別される |
 | 設定シートの初期化 | `createCalendarConfigSheet`: 既存があれば `OK_CANCEL` の確認の後に `clear` | キャンセルなら何もしない |
 
 ### 5.10 Shift.gs: 設定・可用性・割当の判定条件
@@ -428,8 +431,8 @@ A1 形式:         /^([A-Z]+)(\d+)$/
 | 同時刻の担当者 | 2（3 人以上を禁止）。カレンダー予定由来のシフト登録は対象外 | `MAX_SAME_TIME_PEOPLE`、`canAssign` |
 | 不足の強調 | 設定シート合計行の赤強調は 10 時間未満（`不足強調時間`）。不足日レポートと補填は `1日下限`（I2）を優先し、無ければこの値 | `DAILY_MIN_HOURS_HIGHLIGHT`、`updateSettingsTotals`、`buildShortageRows_` |
 | スロット幅 | 15 分固定（`generateTimeSlots`、`slotEndTime`、予定との重なり判定の `15 * 60 * 1000`） | |
-| 時刻・時間数の読み取り | `parseTimeCell`: `HH:mm` 形式、時 0〜23 分 0〜59。`parseHoursValue`: セル書式が `h:mm` 系なら表示値（負も可）、数値はそのまま時間数、`Date` は時+分/60、`H:MM` 文字列は時間換算 | 不正は 0 または `null` |
-| 割当モード | `標準`、`安全優先`、`カバー優先`、`繁忙期`、`研修期`（`研修期` は個別の分岐なし） | `getOperationConfig_` |
+| 時刻・時間数の読み取り | `parseTimeCell`: `HH:mm` 形式、時 0〜23 分 0〜59。`timeCellToMinutes_`: 表示値の `h:mm`、なければ `Date`、0〜1 未満の数値を分単位の数値にする（`validateSettings` の C2・D2 の比較で使う）。`parseHoursValue`: セル書式が `h:mm` 系なら表示値（負も可）、数値はそのまま時間数、`Date` は時+分/60、`H:MM` 文字列は時間換算 | 不正は 0 または `null` |
+| 割当モード | `標準`、`安全優先`、`カバー優先`、`繁忙期`、`研修期`（`研修期` は個別の分岐なし＝標準と同じ動作。運用設定シートの説明と使い方シートに明記済み） | `getOperationConfig_` |
 | 設定シートの初期値（`createSettingsSheet`） | 開始日は翌月 1 日、取得日数はその月の日数、`09:00`〜`18:00`、予定時間計算用稼働日数 20、月間目標 240:00、1 日上限 12:00、1 日下限 10:00 | 初期化時に確認ダイアログ |
 | 運用設定の読み取り失敗 | `try/catch` で握りつぶし、既定値のまま続行 | `getOperationConfig_`（通知なし） |
 
@@ -439,6 +442,7 @@ A1 形式:         /^([A-Z]+)(\d+)$/
 | 安全優先 | `最終フォールバック予定重複` を OFF、バッファを 30 分以上 | `max(30, バッファ)` の 1 段階のみ |
 | カバー優先 | バッファを 15 分以下、最終フォールバックを ON | バッファ、0 の 2 段階 |
 | 繁忙期 | 1 人 1 日の最大を 9 時間以上、1 日の担当者上限を 3 以上、最終フォールバックを ON | カバー優先と同じ 2 段階 |
+| 研修期 | なし（個別の分岐が無く、標準と同じ動作。選択肢としてだけ存在する） | 標準と同じ 3 段階 |
 
 #### 可用性の判定（computeAvailabilityMatrix）
 
@@ -446,7 +450,7 @@ A1 形式:         /^([A-Z]+)(\d+)$/
 | --- | --- | --- |
 | 週次担当で非稼働の日 | `isUserInactiveForDay_` | その日の全スロットが不可 |
 | 予定無視キーワードに一致する予定 | `eventTitleMatchesKeywords` で小文字の部分一致 | その予定を「無い」ものとして扱う（終日予定も） |
-| 終日予定がある | `isAllDayEventSafe` | その日の全スロットが不可 |
+| 終日予定がある | `shift_isAllDayEventSafe_` | その日の全スロットが不可 |
 | 通常予定 | 前後にバッファを足した範囲と、スロット `[開始, 開始+15分)` が重なれば不可 | `slotStart < end && slotEnd > start` |
 | 前後 1h ブロックキーワードの予定 | バッファは `max(通常, 特別)` | `ignoreEvents` が真でもこの範囲は残る |
 | 個人の稼働時間（G、H 列） | `isWithinUserHours`: 開始未満または終了以上は不可。未設定なら制限なし | `ignoreUserHours` が真なら無視 |
@@ -456,7 +460,7 @@ A1 形式:         /^([A-Z]+)(\d+)$/
 
 | 段階 | 条件 | 実装 |
 | --- | --- | --- |
-| 開始前 | 全クリア再割当（`preserveManual` が偽）で `dryRun` でも `skipConfirm` でもなければ `OK_CANCEL` を確認。月間目標（G2）が 0 以下なら中止 | `autoAssignShifts` 冒頭 |
+| 開始前 | 全クリア再割当（`preserveManual` が偽）で `dryRun` でも `skipConfirm` でもなければ `OK_CANCEL` を確認（確認文に削除されるシフト列の数＝登録ユーザー数を入れる。ユーザーが 0 人なら確認の前に中止）。月間目標（G2）が 0 以下なら中止 | `autoAssignShifts` 冒頭 |
 | 対象日の収集 | 除外日は飛ばす。日付シートが無い日は警告。確定済み（A1 のチェック）はスキップ。A4 が `H:MM` 形式なら旧形式として警告しスキップ | `isDayConfirmed_`、(H) の旧形式判定 |
 | 期間指定モード | 範囲外の日は変更せず、本人名のスロットだけ月間累計の初期値に加える | `rangeStartStr`、`baselineTotalSlots` |
 | 既存の保持 | 列の本人名と一致するセルだけを、ロック列または `preserveManual` のとき保持。保持セルは `fixedCells`（後段で動かさない） | `autoAssignShifts` |
@@ -485,7 +489,7 @@ A1 形式:         /^([A-Z]+)(\d+)$/
 日付シート名:          /^\d{4}-\d{2}-\d{2}$/
 旧形式の判定（A4）:    /^\d{1,2}:\d{2}$/
 期間入力（日付）:      /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/     （parseInputDate_。暦として実在しなければ null）
-メール一覧の分割:      /[,,;\s]+/      （管理者・メイン担当。原文のまま。全角読点は含まない）
+メール一覧の分割:      /[,、，;；\s]+/  （parseEmailSet。管理者・メイン担当。キーワードの区切りと同じ全角を含む）
 キーワードの分割:      /[,、，;；]+/   （parseKeywordList。小文字化して部分一致）
 ユーザー参照の分割:    /[,,、;；\s]+/  （resolveUserRefs_。メール、次に名前で照合）
 時間書式の判定:        /(\[?h\]?[:.]mm|hh[:.]mm|h[:.]mm)/i
@@ -505,11 +509,12 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 | ロック列 | 日付シート 4 行目、シフト列側のチェック | 自動では書き換えない。シフト登録キーワードのセルだけ例外的に書く |
 | 手動編集 | `onEdit`: 日付シート名に一致するシートのシフト領域の編集だけ処理。空にすると標準色、ユーザー名と一致すればその色 | 時刻列が `H:MM` 形式でない行は無視 |
 | シフト列の入力規則 | 各列は本人名だけの候補。`setAllowInvalid(true)` | 他人の名前を手入力すると警告になるが、内部書込は例外にならない |
-| カレンダー反映 | `updateTeamCalendarSheets`: 確定日は触らない。それ以外は `saveShiftData`、`clearSheet`、`setupLayout`、`fillAllEvents`、`restoreShiftData` の順に再構築 | シフトは時刻キーと本人名で復元。ロックは位置で復元 |
+| カレンダー反映 | `updateTeamCalendarSheets`: 確定日は触らない。それ以外は `saveShiftData`、`clearSheet`、`setupLayout`、`fillAllEvents`、`restoreShiftData` の順に再構築 | シフトは時刻キーと本人名で復元。ロックも本人名（保存時のシフト列見出し）で復元し（`planLockRestore_`）、いまの一覧に居ない人のロックは復元せず、人数が違って見出しが無いときは復元しない。復元できなかったロックは完了メッセージに日付ごとに表示。取得失敗したカレンダーも同じメッセージに表示 |
+| キーワードルール | `syncKeywordRulesToSettings`: 動作が `強制シフト` のキーワードを N2、`割当不可`・`終日除外` のキーワードを O2 に書く（該当ルールが 0 件なら既存の N2、O2 は変えない）。`優先割当`、`低優先`、`重複許容` と、`前後バッファ分`・`対象` 列は反映しない | 実装は未対応のまま。ルールシートの見出し注記、反映後のダイアログ（未対応のルール件数）、使い方シートで明記 |
 | 除外日 | 土日と日本の祝日（公開カレンダー `ja.japanese#holiday@group.v.calendar.google.com`）を `除外日` シートへ自動追加 | 既存の手入力は保持してマージ。取得失敗は無視（土日のみ） |
 | 稼働日数の計算 | `countBusinessDays`: 土日と祝日を除いた平日 | 祝日が取れなければ土日のみ除外 |
-| 不足補填 | `fillShortageOnlySafely`: 確認ダイアログの後、バックアップを作り、ロック列・管理者・週次非稼働・補填対象外を除く候補の空き枠にだけ追加。同時刻は 2 人まで（定数 2 を直接使用） | 既存シフトとロック列は変更しない |
-| 設定チェック | `validateSettings`: A2 が日付、B2 が正、C2・D2 が時刻で開始 < 終了、G2 が正、I2 <= H2、ユーザーあり。メール重複、E 列未設定、E 合計が G2 の 80% 未満、メイン担当の宛先不明などは警告 | `設定チェック` シートに出力 |
+| 不足補填 | `fillShortageOnlySafely`: 確認ダイアログの後、バックアップを作り、ロック列・管理者・週次非稼働・補填対象外を除く候補の空き枠にだけ追加。同時刻の人数は `getMaxSameTimePeople_()`（運用設定の「同時刻の担当者上限」）で、同時禁止相手は `slotHasForbiddenPartnerFor_` で判定（自動割当本体の `canAssign` と同じ関数）。1 日の担当者上限と 1 人 1 日の最大時間は見ない | 既存シフトとロック列は変更しない。予定の取得に失敗した人がいれば、確認ダイアログと完了ダイアログに示す |
+| 設定チェック | `validateSettings`: A2 が日付、B2 が正、C2・D2 が時刻（`timeCellToMinutes_` で分に直して開始 < 終了を比較。`9:00` と `18:00` のような桁数の違いや Date 値でも正しく比較する）、G2 が正、I2 <= H2、ユーザーあり。メール重複、E 列未設定、E 合計が G2 の 80% 未満、メイン担当の宛先不明などは警告 | `設定チェック` シートに出力 |
 | 履歴 | 自動割当の差分（変更前後が異なるセル）を実行者のメール、操作、日付、時刻、担当者、前後の値、備考、バックアップ ID とともに追記 | 実行者は `Session.getActiveUser().getEmail()`、取れなければ `(不明)` |
 
 ## 6. 外部 API 制約への対応
@@ -553,22 +558,22 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 | 埋め込みの隔離 | `sandbox="allow-scripts allow-forms allow-presentation"` に、埋め込み先がこのページと別オリジンのときだけ `allow-same-origin` を追加（同一オリジンなら付けない）。`referrerpolicy="no-referrer"`。「リンクを開く」は `target="_blank" rel="noopener noreferrer"`。SVG・PNG・共有 HTML の出力では `foreignObject` を除去 |
 | 取り込みの安全 | シーケンス HTML は `script` を実行せず、専用の解析器で式・関数呼び出しを拒否。ボードの画像は MIME を `png`、`jpeg`、`webp` に限定し、SVG を受け付けない。URL は `http` と `https` のみ、認証情報付きは拒否。数値と文字数は範囲に丸める |
 | ブラウザストレージの方針 | 本文・名前・配色・編集モードは localStorage、画像は IndexedDB。ブラウザのデータ削除で消えるため、README と画面表示でボード保存を案内する。失敗は画面表示 |
-| 破壊的操作の確認 | 「新規」は `confirm`。ノード・線・カード・手順の削除は確認なしで、トーストで「戻す」を案内（履歴 80 件）。ボード読込は確認なしで本文を置換するが、取り消し可能。`Shift.gs` の全クリア再割当・シフト欄の初期化・設定シートの初期化・期間指定の組みなおし・不足補填は `OK_CANCEL` の確認を出す。確認文に具体的な件数は出さない（期間指定の組みなおしのみ対象日付を示す） |
-| 部分成功・失敗の可視化 | `index.html` は解析例外を status に出す。`Shift.gs` は警告（未カバー、1 人日、同時禁止、旧形式）を結果ダイアログに列挙し、`設定チェック` シートに出力。`CalendarToSheet.gs` と `Shift.gs` の `fetchEvents` は例外を握りつぶして空配列を返し、取得失敗は利用者に表示されない（9 章） |
+| 破壊的操作の確認 | 「新規」は `confirm`。ノード・線・カード・手順の削除は確認なしで、トーストで「戻す」を案内（履歴 80 件）。ボード読込は確認なしで本文を置換するが、取り消し可能。`Shift.gs` の全クリア再割当・シフト欄の初期化・設定シートの初期化・期間指定の組みなおし・不足補填は `OK_CANCEL` の確認を出す。確認文に具体的な件数を入れるのは、全クリア再割当（削除されるシフト列の数）と期間指定の組みなおし（対象日付）。`CalendarToSheet.gs` は、不正な設定を既定値に置き換えるときに内容を示して `OK_CANCEL` を確認する |
+| 部分成功・失敗の可視化 | `index.html` は解析例外を status に出し、`# @flow` 設定行が壊れていれば警告帯とコンソールに出す（保存しても壊れた行は残す）。`Shift.gs` は警告（未カバー、1 人日、同時禁止、旧形式）を結果ダイアログに列挙し、`設定チェック` シートに出力。予定の取得失敗（カレンダー未検出・権限エラー）は `fetchEvents` が記録し、自動割当の警告欄の先頭、カレンダー反映の完了メッセージ、不足日レポート、不足補填の確認・完了ダイアログに「名前（メール）・理由・失敗日数」を出す。`CalendarToSheet.gs` も取得失敗を完了ダイアログとログに出す。取得失敗を出力から止めてはいない（その人の予定は空欄または予定なしとして扱う） |
 | 二重実行・競合 | `index.html` は単一ユーザー前提。`.gs` は `LockService` を使わず、同時実行の防止は無い。確定フラグ（A1）とロック列で上書きを防ぐ運用 |
 | 巻き戻し | `Shift.gs` は自動割当と不足補填の直前に非表示シート `__シフトバックアップ` へ全日付シートのシフト欄を保存し、`変更履歴` にバックアップ ID を記録する。復元する機能（メニュー・関数）は無い（9 章） |
-| シート数式への注入 | `addDailyTotalsRow` は名前の `"` を `""` にしてから `COUNTIF` に埋める。予定の題名は `setValue` で書き込むため、`=` で始まる題名は数式として評価される可能性がある（9 章、要確認） |
+| シート数式への注入 | `addDailyTotalsRow` は名前の `"` を `""` にしてから `COUNTIF` に埋める。予定の題名は、`CalendarToSheet.gs` の `cts_safeCellText_`、`Shift.gs` の `shift_safeCellText_` が、先頭が `=`、`+`、`-`、`@` のときに先頭へアポストロフィを付けてから書き込む（Sheets の「文字列として入力」の印として消費され、表示されない想定。実機での確認は未実施） |
 | 依存ライブラリ | 無し（`index.html` は外部ライブラリを読み込まない。`package.json` も無い） |
 
 ## 8. 検証と品質保証
 
 - `package.json` は無く、ビルド・lint・CI も無い。`.github/workflows` は存在しない。
 - テストは Node 標準の `node:test` で、`node --test tests/*.test.cjs` を実行する。`index.html` の `BEGIN/END` マーカーの間を `vm` で取り出して評価するため、本番コードと同じ実装を検査する。
-- 資料作成時に実行し、35 件すべて成功した（`tests 35`、`pass 35`）。
+- 資料作成時に実行し、38 件すべて成功した（`tests 38`、`pass 38`。2026-10-22 の修正で `flow-model` に 3 件を追加）。
 
 | テストファイル | 件数 | 対象 |
 | --- | --- | --- |
-| `tests/flow-model.test.cjs` | 25 | 記法の解析（引用符・ASCII 矢印・CRLF 維持）、線の文字編集・図形挿入・重複出現の同時編集、循環、表示名変更、レーン編集、並行辺、縦横レイアウト、遠い接続、設定の保持、ノード属性、接続、削除、ドラッグ座標、不正座標の丸め、メディア（不正 URL・重複 ID・寸法）、ボード検証 |
+| `tests/flow-model.test.cjs` | 28 | 記法の解析（引用符・ASCII 矢印・CRLF 維持）、線の文字編集・図形挿入・重複出現の同時編集、循環、表示名変更、レーン編集、並行辺、縦横レイアウト、遠い接続、設定の保持、壊れた `# @flow` 行の検出と保存時の保持、ノード属性、接続、削除、ドラッグ座標、不正座標の丸め、メディア（不正 URL・重複 ID・寸法）、ボード検証 |
 | `tests/sequence-model.test.cjs` | 6 | 参照データ（47 手順）の取り込み、JSON 出力の取り込み（スクリプト非実行）、リテラル解析器の拒否、不正参照、フローからの生成、不正設定の正規化 |
 | `tests/sequence-render.test.cjs` | 4 | 47 手順の配置範囲、長い文言・自己宛の行の高さ、エスケープ、共有 HTML のデータ埋め込み |
 
@@ -576,31 +581,40 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 
 ## 9. 既知の制約と資料との食い違い
 
-資料と実装の食い違い、未実装・暫定の箇所を挙げる。`要確認` は、利用者または所有者の判断が必要なもの。
+資料と実装の食い違い、未実装・暫定の箇所を挙げる。`要確認` は、利用者または所有者の判断が必要なもの。2026-10-22 の修正で直した項目は、末尾の「修正済み」にまとめる。
 
 | 区分 | 内容 |
 | --- | --- |
-| 要確認 | README は `index.html` のみを説明しており、`CalendarToSheet.gs` と `Shift.gs` の説明が無い。2 本の `.gs` の使い方は各ファイル先頭コメントと、`Shift.gs` の `使い方` シート生成（`createDocsSheet`）が実質の資料 |
-| 要確認 | `CalendarToSheet.gs` と `Shift.gs` は、どちらも `onOpen` と `isAllDayEventSafe` を同名で定義する。同じ Apps Script プロジェクトに両方を入れると後から読み込まれた側が有効になり、メニューが片方になる。さらに、どちらも `yyyy-MM-dd` の名前のシートを作る（`CalendarToSheet.gs` の日付ごと分割出力と `Shift.gs` の日付シート）。同じスプレッドシートで併用すると、`Shift.gs` の日付シートを上書きする可能性がある |
-| 要確認 | `fetchEvents_`（`CalendarToSheet.gs`）と `fetchEvents`（`Shift.gs`）は、カレンダーが見つからない場合も例外の場合も空配列を返す。権限不足や ID の誤りは「予定なし」として扱われ、完了ダイアログにも出ない |
-| 要確認 | `CalendarToSheet.gs` の開始・終了時刻が不正な場合は、通知なしで `09:00`、`18:00` に置換される。時間刻みの不正値も黙って 15 分になる |
-| 要確認 | `CalendarToSheet.gs` は日をまたぐ予定（終了時刻の `HH:mm` が開始より小さい）を時間割に出さない。終日予定を「しない」にすると終日予定は出力されない（仕様どおり） |
-| 要確認 | `Shift.gs` の全クリア再割当の確認文は「既存のシフト（4列分）」と書かれているが、シフト列の数はユーザー数に等しい（4 固定ではない）。文言が旧仕様のまま |
-| 要確認 | `Shift.gs` の警告・案内文・使い方シートは「最新のカレンダー予定を反映（シフト保持）」というメニュー名を案内するが、実際のメニュー項目は「① カレンダー予定を反映」（`onOpen`）。旧形式の日付シートは自動変換されず、スキップして警告するだけ |
-| 要確認 | `validateSettings` は C2、D2 の表示値を文字列のまま `>=` で比較する。初期値は `h:mm` 書式のため表示が `9:00` と `18:00` になり、文字列比較では `9:00` の方が大きいと判定されて「C2（開始時刻）がD2（終了時刻）以降」のエラーになりうる（コード上の推測で、実行は未確認） |
-| 要確認 | `Shift.gs` の「キーワードルール」シートは `優先割当`、`低優先`、`重複許容` を選べるが、`syncKeywordRulesToSettings` が反映するのは `強制シフト`（シフト登録キーワード）と `割当不可`、`終日除外`（前後 1h ブロックキーワード）だけ。`前後バッファ分` と `対象` 列は反映処理で使われない |
-| 要確認 | `Shift.gs` の `fillShortageOnlySafely` は同時刻の人数を `otherCount >= 2` の固定値で判定し、`MAX_SAME_TIME_PEOPLE` や運用設定の `同時刻の担当者上限`、同時禁止相手を参照しない。自動割当本体とは条件が異なる |
-| 要確認 | `Shift.gs` の `空き時間抽出: 実シフト優先キーワード` は、組織名を含む `【作業】鹿島_SES` が既定値で、設定を空欄にしても既定値に戻る（`getOperationConfig_`）。別の組織で使う場合は明示的な書き換えが必要 |
-| 要確認 | メールアドレスの区切り `/[,,;\s]+/` は、全角の読点やセミコロンを区切りとして扱わない（キーワードの区切りは全角を含む）。入力例が全角のとき、メイン担当・管理者が認識されない可能性がある |
-| 要確認 | `Shift.gs` のバックアップは書き込むだけで、復元する関数・メニューが無い。巻き戻しは `__シフトバックアップ` シートを手作業で参照する |
-| 要確認 | カレンダーの題名は `setValue` で書き込まれる。`=` で始まる題名が数式として評価される可能性がある（`fillAllEvents`、`writeVertical_` など）。実際の挙動は未検証 |
-| 要確認 | `restoreShiftData` はシフトを本人名で復元する一方、ロックは列の位置で復元する。ユーザーの並びや人数を変えた後にカレンダー反映すると、ロックが別の人の列に移る可能性がある |
-| 要確認 | `readSettings` は `# @flow ` の JSON が壊れていると、通知なしで設定（座標、画像カード、シーケンスデータ）を既定値に戻して扱う。保存し直すと元のデータは失われる |
-| 要確認 | `Shift.gs` の `割当モード` に `研修期` を選べるが、`getOperationConfig_` と `buildStrictnessLevels_` に個別の分岐が無い（標準と同じ動作） |
-| 要確認 | README の「持ち運び用ボードの画像データは合計64MBまで」は、実装では 64 MB ではなく `dataUrl` の文字数の合計 64,000,000（base64 の文字数）で数える。バイト数とは一致しない |
+| 要確認 | `CalendarToSheet.gs` の `createCalendarConfigSheet` は、対象カレンダーの見出し行を `CTS_USER_START_ROW - 1`（11 行目）に書くが、11 行目は基本設定の「出力方法」の行でもある。作成直後の設定シートでは B11 が `メールアドレス` で上書きされ、`readCalendarConfig_` の出力方法の判定は常に「日付ごとに分ける」になる（「1シートにまとめる」を選べない）。直すには見出し行をずらす必要があり、既存の設定シートでは対象カレンダーの開始行（12 行目）も変わるため、今回は直していない。README に注意を書いた |
+| 要確認 | `CalendarToSheet.gs` は日をまたぐ予定（終了時刻の `HH:mm` が開始より小さい）を時間割に出さない。終日予定を「しない」にすると終日予定は出力されない（仕様どおり。見送り） |
+| 要確認 | `Shift.gs` の `空き時間抽出: 実シフト優先キーワード` は、組織名を含む `【作業】鹿島_SES` が既定値で、設定を空欄にしても既定値に戻る（`getOperationConfig_`）。別の組織で使う場合は明示的な書き換えが必要（利用者の組織向けの既定値のため変更しない。README に明記） |
+| 要確認 | `Shift.gs` のバックアップは書き込むだけで、復元する関数・メニューが無い。巻き戻しは `__シフトバックアップ` シートを手作業で参照する（見送り。README に明記） |
+| 要確認 | `Shift.gs` の使い方シートと案内文には、実際のメニュー項目名と食い違うものが残っている（例: 「集計のみ更新」→ 実際は「③ 集計を更新」、「シフトを自動入力（空き枠のみ）」→「② シフトを自動作成（空き枠のみ）」、「シフトを自動入力（全クリア）」→「シフトを自動作成（全クリア）」、「設定シートを初期化」→「設定シートを作成/初期化」、「指定期間だけ組みなおす」→「②-2 指定期間だけ組みなおす」）。「① カレンダー予定を反映」だけは今回そろえた |
+| 要確認 | `fillShortageOnlySafely` は、同時刻の人数上限と同時禁止相手は自動割当本体と同じ判定になったが、`canAssign` が見る「1 日の担当者上限」と「1 人 1 日の最大時間（8 時間）」、前後 1h ブロック以外の制約（E 目標など）は見ない |
+| 要確認 | 取得に失敗したカレンダーの人は、自動割当・不足補填では「予定なし」として扱われたまま処理が進む（警告・確認ダイアログには出る）。失敗した人がいるときに処理を中止するかどうかは、運用の判断が要る |
+| 未実装（明記済み） | `Shift.gs` の「キーワードルール」シートは `優先割当`、`低優先`、`重複許容` を選べるが、`syncKeywordRulesToSettings` が反映するのは `強制シフト`、`割当不可`、`終日除外` だけ。`前後バッファ分` と `対象` 列も使われない。見出し注記・反映後のダイアログ・使い方シート・README に「未対応」と明記した（挙動は変えていない） |
+| 未実装（明記済み） | `Shift.gs` の `割当モード` の `研修期` は個別の分岐が無く標準と同じ動作。運用設定シートの説明・使い方シート・README に明記した |
 | 本資料では扱わない | `Shift.gs` の次の領域は読んでいない、または概要のみ。`createSettingsSheet`（設定シートの初期レイアウト）、`createDocsSheet`（使い方シートの本文）、`extractFreeTimeCore_` の後半と `writeFreeTimeTablesToSettings`、`createTestSimulationSheet`、`createUserAttributesSheet`、`createWeeklyAssignmentSheet`、`updateSettingsTotals` の集計式、`autoAssignShifts` 内の日次ペア保証・月間目標上乗せ・単独禁止・飛び飛び整理・短い孤立解消の細部の条件（`canPairCell`、`canTopUpCell` など） |
 | 本資料では扱わない | `index.html` の CSS（8〜179 行）と、画面ごとのラベル・アイコン定義、シーケンス描画（`renderSequenceDiagram`）の座標の細部 |
-| 未検証 | `.gs` はこの環境で実行しておらず、Google サービスの制限（実行時間、呼び出し回数）に対する実測は無い。`index.html` のブラウザ上の動作もこの資料では確認していない |
+| 未検証 | `.gs` は Apps Script 上では実行していない（2026-10-22 の修正では、時刻の比較・ロックの復元計画・題名の無害化・取得失敗の集計・不足補填の判定などを、Apps Script の API をスタブにして `node:vm` で確認しただけで、リポジトリのテストには含めていない）。Google サービスの制限（実行時間、呼び出し回数）に対する実測も無い。`index.html` のブラウザ上の動作（警告帯の表示を含む）もこの資料では確認していない |
+
+### 修正済み（2026-10-22）
+
+| 修正前の食い違い | 修正後 |
+| --- | --- |
+| README に `CalendarToSheet.gs`、`Shift.gs` の説明が無い | README に両ファイルの用途・設定・メニュー・失敗時の表示・既知の制限を追加 |
+| 2 本が `onOpen` と日付名シートで衝突する（`isAllDayEventSafe` は実際には `isAllDayEventSafe_` と `isAllDayEventSafe` で名前が違い、衝突していなかった） | 補助関数を `cts_isAllDayEventSafe_`、`shift_isAllDayEventSafe_` にしてファイル別の名前にした。README に「別々のスプレッドシートで使う」「両方を 1 つのプロジェクトで使うなら `onOpen` を統合する」手順と、日付名シートの衝突を明記。`CalendarToSheet.gs` の先頭コメントにも注意を追加 |
+| `fetchEvents_` / `fetchEvents` が失敗しても空配列を返し、利用者に分からない | 失敗を記録し、完了ダイアログ・自動割当の警告欄・不足日レポート・不足補填のダイアログとログに表示（5.9、5.10、7 章） |
+| `CalendarToSheet.gs` の不正な開始・終了時刻・時間刻みが無言で既定値になる | 既定値を使う旨を実行前のダイアログで示し、続行かキャンセルを選べるようにした。完了ダイアログに時間帯と刻みも表示 |
+| `validateSettings` が C2・D2 の表示値を文字列のまま `>=` で比較する | `timeCellToMinutes_` で分に直して比較（`vm` で `9:00` / `18:00`、Date 値、午前・午後表記を確認） |
+| 全クリア再割当の確認文が「4列分」 | 実際のシフト列数（登録ユーザー数）を表示 |
+| 案内文・使い方シートのメニュー名「最新のカレンダー予定を反映（シフト保持）」 | 実際のメニュー項目名「① カレンダー予定を反映」に統一 |
+| `fillShortageOnlySafely` が `otherCount >= 2` 固定 | `getMaxSameTimePeople_()` と `slotHasForbiddenPartnerFor_` を使う（`vm` で上限 1、2、3 と同時禁止相手を確認） |
+| メールアドレスの区切りに全角の読点・セミコロンが無い | `parseEmailSet` を `/[,、，;；\s]+/` にし、管理者・メイン担当の 3 か所の分割を `parseEmailSet` に統一 |
+| `restoreShiftData` がロックを列の位置で復元する | 保存時のシフト列見出し（本人名）で復元。居なくなった人のロックは復元せず、見出しが無く人数が違うときは復元しない。いずれも完了メッセージに日付ごとに表示 |
+| 題名の `setValue` で `=` 始まりが数式になりうる | `cts_safeCellText_`、`shift_safeCellText_` で `= + - @` 始まりの先頭にアポストロフィを付ける（実機表示は未検証。7 章） |
+| `readSettings` が壊れた `# @flow ` 行を無言で既定値に戻し、保存で元データが失われる | 壊れた行を画面上部の警告帯とコンソールに表示し、`writeSettings` は壊れた行を削除せず残す。テスト 3 件を追加 |
+| README の「画像データは合計 64MB まで」 | 実装どおり「`dataUrl` の文字数の合計が 64,000,000 文字（バイト数とは一致しない）」に修正 |
 
 ## 10. 関連資料
 

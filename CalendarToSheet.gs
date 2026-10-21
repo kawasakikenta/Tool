@@ -21,6 +21,14 @@
  *    2) メニュー「カレンダー取得」→「① 設定シートを作成」を実行
  *    3) 「カレンダー設定」シートに貼り付け先・向き・期間・対象を入力
  *    4) メニュー「カレンダー取得」→「② 予定を取得して反映」を実行
+ *
+ *  注意:
+ *    - Shift.gs とは別々のスプレッドシート（別の Apps Script プロジェクト）で使う。
+ *      同じプロジェクトに入れると、どちらも onOpen を定義しているため片方のメニューしか
+ *      出ない。両方を 1 つのプロジェクトで使う場合は、onOpen を 1 つにして両方のメニューを
+ *      作る（README の「CalendarToSheet.gs と Shift.gs を併用する場合」を参照）。
+ *    - 「日付ごとに分ける」で作るシート名（yyyy-MM-dd）は Shift.gs の日付シートと同じ形式。
+ *      同じスプレッドシートで併用すると、Shift.gs の日付シートを上書きする。
  * ============================================================================
  */
 
@@ -176,13 +184,31 @@ function extractCalendarToSheet() {
     return;
   }
 
-  // 各日 × 各ユーザーの予定を取得
+  // 不正・未入力の設定を既定値に置き換えた場合は、実行前に利用者へ知らせる。
+  if (cfg.notices.length > 0) {
+    const res = ui.alert(
+      '設定の確認',
+      '次の設定は未入力または使えない値だったため、既定値で取得します。\n\n' +
+      cfg.notices.map(n => '・' + n).join('\n') +
+      '\n\n続行しますか？（中止して「カレンダー設定」シートを直すこともできます）',
+      ui.ButtonSet.OK_CANCEL
+    );
+    if (res !== ui.Button.OK) return;
+  }
+
+  // 各日 × 各ユーザーの予定を取得。取得に失敗したカレンダーは「予定なし」と区別して集計する。
   const days = eachDate_(cfg.startDate, cfg.endDate);
+  const fetchErrors = {};
   const allDayData = days.map(date => ({
     date: date,
-    userSlots: cfg.users.map(u =>
-      buildSlotData_(fetchEvents_(u.email, date), timeSlots, date, cfg.fetchAllDay)),
+    userSlots: cfg.users.map(u => {
+      const fetched = fetchEvents_(u.email, date);
+      if (fetched.error) recordFetchError_(fetchErrors, u, fetched.error);
+      return buildSlotData_(fetched.events, timeSlots, date, cfg.fetchAllDay);
+    }),
   }));
+  const fetchErrorText = formatFetchErrors_(fetchErrors, days.length);
+  if (fetchErrorText) Logger.log(fetchErrorText);
 
   let firstSheet = null;
   const sheetNames = [];
@@ -221,14 +247,16 @@ function extractCalendarToSheet() {
 
   if (firstSheet) ss.setActiveSheet(firstSheet);
   ui.alert(
-    '完了',
+    fetchErrorText ? '完了（取得できなかったカレンダーあり）' : '完了',
     `カレンダーの予定を反映しました。\n` +
     `・出力方法: ${cfg.splitByDay ? '日付ごとにシートを作成' : `1シートにまとめる（${cfg.destCellA1} 起点）`}\n` +
     `・向き: ${cfg.orientation}向き\n` +
     `・期間: ${fmtDate_(cfg.startDate)} 〜 ${fmtDate_(cfg.endDate)}（${days.length}日）\n` +
+    `・時間帯: ${cfg.startTime} 〜 ${cfg.endTime}（${cfg.stepMinutes}分刻み）\n` +
     `・終日予定: ${cfg.fetchAllDay ? '別枠で取得' : '取得しない'}\n` +
     `・対象: ${cfg.users.length}名\n` +
-    `・作成シート: ${sheetNames.join(', ')}`,
+    `・作成シート: ${sheetNames.join(', ')}` +
+    (fetchErrorText ? `\n\n${fetchErrorText}` : ''),
     ui.ButtonSet.OK
   );
 }
@@ -253,9 +281,11 @@ function readCalendarConfig_(ss) {
   const orientationRaw = get(4) || '縦';
   const startDate = parseDateCell_(get(5));
   const endDate = parseDateCell_(get(6));
-  const startTime = parseTimeStr_(get(7)) || '09:00';
-  const endTime = parseTimeStr_(get(8)) || '18:00';
-  const stepMinutes = parseInt(get(9), 10) || 15;
+  // 不正・未入力の値は既定値に置き換えるが、黙って置き換えず notices に残して利用者へ知らせる。
+  const notices = [];
+  const startTime = timeOrDefault_(get(7), '09:00', '開始時刻（B7）', notices);
+  const endTime = timeOrDefault_(get(8), '18:00', '終了時刻（B8）', notices);
+  const stepMinutes = stepOrDefault_(get(9), 15, '時間刻み（B9）', notices);
   const fetchAllDay = !/しない|no|false/i.test(get(10));
   // 出力方法: 「まとめる」以外（＝分ける/未入力）はすべて日付ごとに分ける
   const splitByDay = !/まとめ|1シート|一シート|together|single/i.test(get(11));
@@ -282,7 +312,7 @@ function readCalendarConfig_(ss) {
     orientation, startDate, endDate,
     startTime, endTime, stepMinutes,
     fetchAllDay, splitByDay,
-    users,
+    users, notices,
   };
 }
 
@@ -308,23 +338,53 @@ function readCalendarUsers_(sheet) {
 
 /** ===================== カレンダー取得 ===================== */
 
-/** 指定日(その日の00:00〜23:59)の予定を取得。参加拒否した予定は除外。 */
+/**
+ * 指定日(その日の00:00〜23:59)の予定を取得。参加拒否した予定は除外。
+ * 返り値: { events: Event[], error: string }
+ *   error が空でなければ「予定なし」ではなく取得失敗（カレンダー未検出・権限エラーなど）。
+ */
 function fetchEvents_(email, date) {
   try {
     const calendar = CalendarApp.getCalendarById(email);
-    if (!calendar) return [];
+    if (!calendar) {
+      return {
+        events: [],
+        error: 'カレンダーが見つかりません（メールアドレスの誤り、または閲覧権限・共有設定がありません）',
+      };
+    }
     const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
     const end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
-    return calendar.getEvents(start, end).filter(ev => {
+    const events = calendar.getEvents(start, end).filter(ev => {
       try {
         return ev.getMyStatus() !== CalendarApp.GuestStatus.NO;
       } catch (e) {
         return true;
       }
     });
+    return { events: events, error: '' };
   } catch (e) {
-    return [];
+    return { events: [], error: '予定の取得に失敗しました: ' + (e && e.message ? e.message : String(e)) };
   }
+}
+
+/** 取得失敗を利用者（メール）単位で集計する。errors はメールをキーにした連想配列。 */
+function recordFetchError_(errors, user, message) {
+  const key = user.email;
+  if (!errors[key]) errors[key] = { name: user.name, email: user.email, message: message, days: 0 };
+  errors[key].days++;
+}
+
+/** 取得失敗の一覧を完了ダイアログ・ログ用の文章にする。失敗が無ければ空文字。 */
+function formatFetchErrors_(errors, totalDays) {
+  const keys = Object.keys(errors);
+  if (keys.length === 0) return '';
+  const lines = keys.map(k => {
+    const e = errors[k];
+    return `・${e.name}（${e.email}）: ${e.message}［${e.days}/${totalDays}日で失敗］`;
+  });
+  return '【予定を取得できなかったカレンダー】\n' +
+    '以下は「予定なし」ではなく取得失敗です。出力では空欄になっています。\n' +
+    lines.join('\n');
 }
 
 /**
@@ -343,10 +403,12 @@ function buildSlotData_(events, timeSlots, date, fetchAllDay) {
     if (!title) title = '(予定)';
 
     // 終日予定は時間スロットには入れず、別枠に集約する
-    if (isAllDayEventSafe_(event)) {
+    if (cts_isAllDayEventSafe_(event)) {
       if (fetchAllDay) allDayTitles.push(title);
       return;
     }
+    // 題名が数式として評価されないよう、時間スロットに書く題名を文字列として安全にする。
+    title = cts_safeCellText_(title);
 
     let startStr, endStr;
     try {
@@ -366,7 +428,7 @@ function buildSlotData_(events, timeSlots, date, fetchAllDay) {
     }
   });
 
-  return { slots: slotData, allDay: allDayTitles.join(' / ') };
+  return { slots: slotData, allDay: cts_safeCellText_(allDayTitles.join(' / ')) };
 }
 
 /** ===================== 出力（縦向き） =====================
@@ -557,8 +619,38 @@ function clearOutputArea_(sheet, cfg, timeSlots, dayData) {
 
 /** ===================== 補助関数 ===================== */
 
-function isAllDayEventSafe_(event) {
+function cts_isAllDayEventSafe_(event) {
   try { return event.isAllDayEvent(); } catch (e) { return false; }
+}
+
+/**
+ * セルへ書く予定の題名を安全にする。= + - @ で始まる文字列は、先頭にアポストロフィを付けて
+ * 数式として評価されないようにする（Sheets ではアポストロフィは「文字列として入力」の印で、
+ * セルには表示されない）。
+ */
+function cts_safeCellText_(value) {
+  const s = (value === null || value === undefined) ? '' : String(value);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
+/** 時刻設定を HH:mm に。不正・未入力は既定値にして notices に理由を残す。 */
+function timeOrDefault_(raw, fallback, label, notices) {
+  const parsed = parseTimeStr_(raw);
+  if (parsed) return parsed;
+  notices.push(raw
+    ? `${label}「${raw}」は時刻（例: 09:00）として読めないため ${fallback} を使います`
+    : `${label}が未入力のため ${fallback} を使います`);
+  return fallback;
+}
+
+/** 時間刻み（分）を正の整数に。不正・未入力・0 以下は既定値にして notices に理由を残す。 */
+function stepOrDefault_(raw, fallback, label, notices) {
+  const n = parseInt(raw, 10);
+  if (n > 0) return n;
+  notices.push(raw
+    ? `${label}「${raw}」は 1 以上の分数として読めないため ${fallback} 分を使います`
+    : `${label}が未入力のため ${fallback} 分を使います`);
+  return fallback;
 }
 
 /** 'HH:mm' スロットを開始〜終了・刻み(分)で生成 */
