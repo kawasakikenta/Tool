@@ -72,6 +72,7 @@
     .display-tools label { display:flex; align-items:center; gap:6px; }
     .display-tools select { max-width:145px; min-height:32px; padding:5px 7px; border:1px solid var(--line); border-radius:6px; background:#fff; color:#26344a; }
     .edge-guide,.display-tools { flex-wrap:wrap; flex-shrink:0; }
+    .settings-warning { flex-shrink:0; padding:8px 16px; background:#fff4e0; border-bottom:1px solid #f0c98f; color:#8a4b00; font-size:11px; line-height:1.6; }
     .edit-actions { display:flex; gap:6px; }
     .flow-edge:hover .edge-line,.flow-edge:focus .edge-line,.flow-edge.is-selected .edge-line { stroke:#356ae6; stroke-width:3; }
     .flow-edge:hover .edge-label-bg,.flow-edge:focus .edge-label-bg,.flow-edge.is-selected .edge-label-bg { stroke:#356ae6; }
@@ -270,6 +271,7 @@
       <div class="panel-head"><input class="flow-name" id="flowName" value="受注業務フロー" aria-label="フロー名"><span class="status" id="status"></span><div class="preview-tools"><select id="theme" aria-label="配色"><option value="blue">ブルー</option><option value="green">グリーン</option><option value="mono">モノクロ</option></select><button id="zoomOut" data-icon="zoomOut" title="縮小" aria-label="図を縮小"></button><span class="zoom-value" id="zoomValue">100%</span><button id="zoomIn" data-icon="zoomIn" title="拡大" aria-label="図を拡大"></button><button id="fitBtn" data-icon="fit" title="図全体を画面内に収める">全体</button></div></div>
       <div class="display-tools"><button class="btn" id="undoBtn" data-icon="undo" title="元に戻す（Ctrl+Z）">戻す</button><button class="btn" id="redoBtn" data-icon="redo" title="やり直す（Ctrl+Shift+Z）">やり直す</button><label for="diagramType">形式 <select id="diagramType" aria-label="図の形式"><option value="flow">フロー図</option><option value="sequence">シーケンス図</option></select></label><button class="btn" id="seqWidthBtn" title="横幅に合わせて、縦にスクロールして読む">幅に合わせる</button><label class="flow-only" for="orientation">向き <select id="orientation" aria-label="図の向き"><option value="horizontal">横方向 →</option><option value="vertical">縦方向 ↓</option></select></label><label class="flow-only" for="longLinks">遠い線 <select id="longLinks"><option value="line">線で表示</option><option value="auto">番号で自動省略</option></select></label><button class="btn flow-only" id="arrangeBtn" data-icon="fit">自動整列</button><label><input id="snapGrid" type="checkbox" checked>グリッド</label></div>
       <div class="edge-guide"><span id="interactionHint" role="status">図形を選んで編集。ドラッグで移動できます</span><div class="edit-actions"><button class="btn" id="cancelConnectBtn" hidden>接続をキャンセル</button><button class="btn flow-only" id="editTextBtn" data-icon="text">文字を編集</button><button class="btn flow-only" id="editEdgeBtn" data-icon="editLine" title="編集する接続線を選ぶ">線を編集</button></div></div>
+      <div class="settings-warning" id="settingsWarning" role="alert" hidden></div>
       <div class="canvas"><svg id="diagram" xmlns="http://www.w3.org/2000/svg" aria-label="業務フロー図"></svg></div>
       <div class="empty" id="empty"><div><b>「処理」「判断」から図形を追加</b>ドラッグして並べ、図形同士をつなげます</div></div>
       <div class="examples" id="examples" role="region" aria-label="書き方とサンプル">
@@ -1131,9 +1133,25 @@ function validateBoard(value){
 }
 
 const settingsPrefix='# @flow ';
+function parseSettingsLine(line){
+  const trimmed=line.trim();
+  if(!trimmed.startsWith(settingsPrefix))return {isSettings:false,value:null};
+  try{const value=JSON.parse(trimmed.slice(settingsPrefix.length));if(value&&typeof value==='object'&&!Array.isArray(value))return {isSettings:true,value}}catch{}
+  return {isSettings:true,value:null};
+}
+function invalidSettingsLines(text){
+  const result=[];
+  text.split('\n').forEach((line,index)=>{const parsed=parseSettingsLine(line);if(parsed.isSettings&&!parsed.value)result.push({line:index+1,text:line.trim()})});
+  return result;
+}
+function settingsWarning(text){
+  const invalid=invalidSettingsLines(text);
+  if(!invalid.length)return '';
+  return `「# @flow 」の設定行（${invalid.map(item=>item.line+'行目').join('、')}）を読み取れません。図の配置・画像カード・シーケンスの設定は既定値で表示しています。壊れた行は上書きせずそのまま残します。「テキスト」で該当行を確認し、必要なら修正または削除してください。`;
+}
 function readSettings(text){
   let data={};
-  for(const line of text.split('\n')){if(line.trim().startsWith(settingsPrefix)){try{const value=JSON.parse(line.trim().slice(settingsPrefix.length));if(value&&typeof value==='object')data=value}catch{}}}
+  for(const line of text.split('\n')){const parsed=parseSettingsLine(line);if(parsed.value)data=parsed.value}
   const nodes=Array.isArray(data.nodes)?data.nodes.filter(n=>n&&typeof n.id==='string').map(n=>{
     const positions={};for(const direction of ['horizontal','vertical']){const p=n.positions?.[direction];if(p&&Number.isFinite(p.flow)&&Number.isFinite(p.cross))positions[direction]={flow:Math.max(20,Math.min(12000,p.flow)),cross:Math.max(20,Math.min(12000,p.cross))}}
     return {id:n.id,lane:typeof n.lane==='string'?n.lane:undefined,color:['blue','green','orange','purple','pink'].includes(n.color)?n.color:'auto',positions};
@@ -1142,7 +1160,8 @@ function readSettings(text){
 }
 function writeSettings(text,settings){
   const newline=text.includes('\r\n')?'\r\n':'\n';
-  const lines=text.split('\n').filter(line=>!line.trim().startsWith(settingsPrefix));
+  // 読み取れる設定行だけを新しい 1 行に置き換える。壊れた行は元のデータを失わないよう残す。
+  const lines=text.split('\n').filter(line=>{const parsed=parseSettingsLine(line);return !(parsed.isSettings&&parsed.value)});
   return settingsPrefix+JSON.stringify(settings)+newline+lines.join('\n');
 }
 function sameConnection(a,b){return a.from===b.from&&a.to===b.to&&a.label===b.label}
@@ -1999,7 +2018,10 @@ if (typeof module === 'object' && module && module.exports) {
 }
 
 // END SEQUENCE RENDER
+let lastSettingsWarning='';
+function syncSettingsWarning(){const message=settingsWarning(source.value),el=$('#settingsWarning');el.textContent=message;el.hidden=!message;if(message&&message!==lastSettingsWarning)console.warn(message);lastSettingsWarning=message}
 function render(graphOverride=null){
+  syncSettingsWarning();
   try{
     const graph=graphOverride||layout(parse(source.value)),theme=themes[$('#theme').value]||themes.blue;lastGraph=graph;if(graph.settings.diagramType==='sequence'){renderSequenceMode(graph);return}$('#editEdgeBtn').disabled=!graph.edges.length;$('#editTextBtn').disabled=!graph.nodes.length&&!graph.laneTokens.length;$('#orientation').value=graph.settings.orientation;$('#longLinks').value=graph.settings.longLinks;$('#status').textContent=graph.nodes.length?`${graph.lanes.length}レーン・${graph.nodes.length}工程`:' ';$('#status').className='status';$('#empty').style.display=graph.nodes.length||graph.settings.media.length?'none':'grid';if(graph.settings.media.length)$('#status').textContent+=`・${graph.settings.media.length}カード`;
     if($('#theme').value==='mono')graph.routes.forEach((route,index)=>{route.color='#596374';route.dash=['','7 4','2 4','9 3 2 3'][index%4]});

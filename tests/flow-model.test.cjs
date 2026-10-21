@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 new vm.Script(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
 const model = html.match(/\/\/ BEGIN FLOW MODEL([\s\S]*?)\/\/ END FLOW MODEL/)[1];
-const {parse, layout, editEdgeLabel, insertEdgeNode, editNodeText, editLaneText, readSettings, writeSettings, setConnectionMode, connectionMode, updateNode, addVisualNode, connectNodes, removeFromFlow, moveVisualNode, resetPositions, safeMediaUrl, normalizeMedia, setMediaCards, changeMedia, resizeMedia, validateBoard} = vm.runInNewContext(model + '\n({parse,layout,editEdgeLabel,insertEdgeNode,editNodeText,editLaneText,readSettings,writeSettings,setConnectionMode,connectionMode,updateNode,addVisualNode,connectNodes,removeFromFlow,moveVisualNode,resetPositions,safeMediaUrl,normalizeMedia,setMediaCards,changeMedia,resizeMedia,validateBoard})', {URL});
+const {parse, layout, editEdgeLabel, insertEdgeNode, editNodeText, editLaneText, readSettings, writeSettings, setConnectionMode, connectionMode, updateNode, addVisualNode, connectNodes, removeFromFlow, moveVisualNode, resetPositions, safeMediaUrl, normalizeMedia, setMediaCards, changeMedia, resizeMedia, validateBoard, invalidSettingsLines, settingsWarning} = vm.runInNewContext(model + '\n({parse,layout,editEdgeLabel,insertEdgeNode,editNodeText,editLaneText,readSettings,writeSettings,setConnectionMode,connectionMode,updateNode,addVisualNode,connectNodes,removeFromFlow,moveVisualNode,resetPositions,safeMediaUrl,normalizeMedia,setMediaCards,changeMedia,resizeMedia,validateBoard,invalidSettingsLines,settingsWarning})', {URL});
 const plain = value => JSON.parse(JSON.stringify(value));
 const edges = graph => plain(graph.edges.map(({from,to,label}) => ({from,to,label})));
 
@@ -257,4 +257,39 @@ test('dragging saves snapped positions and lane membership independently in both
 test('invalid imported positions are ignored and extreme values are bounded', () => {
   const settings=readSettings('# @flow {"nodes":[{"id":"A","positions":{"horizontal":{"flow":"wrong","cross":null},"vertical":{"flow":1e9,"cross":-5}}}]}\nA → B');
   assert.equal(settings.nodes[0].positions.horizontal,undefined);assert.equal(settings.nodes[0].positions.vertical.flow,12000);assert.equal(settings.nodes[0].positions.vertical.cross,20);
+});
+
+test('a broken settings line is reported, kept on save, and never lost', () => {
+  const broken='# @flow {"orientation":"vertical","nodes":[{"id":"A"',text=broken+'\n営業:\nA → B';
+  assert.deepEqual(plain(invalidSettingsLines(text)),[{line:1,text:broken}]);
+  assert.match(settingsWarning(text),/1行目/);
+  assert.equal(readSettings(text).orientation,'horizontal');
+  const saved=writeSettings(text,{...readSettings(text),orientation:'vertical'});
+  assert.ok(saved.split('\n').includes(broken),'the broken line must remain in the saved text');
+  assert.equal(readSettings(saved).orientation,'vertical');
+  assert.equal(parse(saved).edges.length,1);
+  const again=writeSettings(saved,{...readSettings(saved),longLinks:'auto'});
+  assert.equal(again.split('\n').filter(line=>line===broken).length,1);
+  assert.equal(again.split('\n').filter(line=>line.startsWith('# @flow ')&&line!==broken).length,1);
+  assert.deepEqual(plain(invalidSettingsLines(again)).map(item=>item.text),[broken]);
+});
+test('valid and absent settings produce no warning and a non-object settings value counts as broken', () => {
+  const text=writeSettings('A → B',{...readSettings('A → B'),orientation:'vertical'});
+  assert.equal(settingsWarning(text),'');assert.equal(settingsWarning('A → B'),'');
+  assert.equal(settingsWarning('# @flow\nA → B'),'');
+  for(const raw of ['# @flow []','# @flow 123','# @flow null','# @flow not json']){
+    const input=raw+'\nA → B';assert.equal(invalidSettingsLines(input).length,1,raw);
+    assert.ok(writeSettings(input,readSettings(input)).split('\n').includes(raw),raw);
+  }
+  const crlf=writeSettings('# @flow {broken\r\nA → B\r\n',readSettings('A'));
+  assert.ok(crlf.includes('# @flow {broken\r'));assert.ok(crlf.startsWith('# @flow {'));
+});
+test('a valid line replaces older valid lines while a broken sibling is kept', () => {
+  const text='# @flow {"orientation":"vertical"}\n# @flow {oops\nA → B';
+  assert.deepEqual(plain(invalidSettingsLines(text)).map(item=>item.line),[2]);
+  assert.equal(readSettings(text).orientation,'vertical');
+  const saved=writeSettings(text,{...readSettings(text),orientation:'horizontal'});
+  assert.equal(saved.split('\n').filter(line=>line.startsWith('# @flow {"')).length,1);
+  assert.ok(saved.split('\n').includes('# @flow {oops'));
+  assert.equal(readSettings(saved).orientation,'horizontal');
 });
