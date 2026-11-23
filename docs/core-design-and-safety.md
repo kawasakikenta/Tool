@@ -21,7 +21,7 @@
 | テキスト記法の解析・自動配置・保存形式 | `index.html` の `// BEGIN FLOW MODEL` 〜 `// END FLOW MODEL`（`parse`、`layout`、`routeConnections`、`readSettings`） |
 | シーケンス図のデータ検証・取り込み | `index.html` の `// BEGIN SEQUENCE MODEL` 〜 `// END SEQUENCE MODEL`、描画は `// BEGIN SEQUENCE RENDER` 〜 `// END SEQUENCE RENDER` |
 | 画面操作・保存・出力 | `index.html` の `render`、`commitDocument`、`saveDraft`、`importBoardFile`、`exportSvg` |
-| 回帰テスト | `tests/flow-model.test.cjs`、`tests/sequence-model.test.cjs`、`tests/sequence-render.test.cjs`、`tests/gas-slots.test.cjs`（`.gs` の時間枠の割り当て） |
+| 回帰テスト | `tests/flow-model.test.cjs`、`tests/sequence-model.test.cjs`、`tests/sequence-render.test.cjs`、`tests/gas-slots.test.cjs`（`.gs` の時間枠の割り当て）、`tests/gas-menu.test.cjs`（`Shift.gs` のメニュー名） |
 | カレンダー転記の仕様 | `CalendarToSheet.gs`（先頭コメントと `extractCalendarToSheet`） |
 | シフト自動割当の仕様 | `Shift.gs`（`autoAssignShifts`、`computeAvailabilityMatrix`、`getOperationConfig_`） |
 | エージェント運用 | `CLAUDE.md`、`AGENTS.md`、`docs/agent-orchestration.md` |
@@ -569,7 +569,7 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 
 - `package.json` は無く、ビルド・lint・CI も無い。`.github/workflows` は存在しない。
 - テストは Node 標準の `node:test` で、`node --test tests/*.test.cjs` を実行する。`index.html` の `BEGIN/END` マーカーの間を `vm` で取り出して評価するため、本番コードと同じ実装を検査する。
-- 資料作成時に実行し、38 件すべて成功した（`tests 38`、`pass 38`。2026-10-22 の修正で `flow-model` に 3 件を追加）。2026-11-23 に `gas-slots` の 4 件を追加し、42 件。
+- 資料作成時に実行し、38 件すべて成功した（`tests 38`、`pass 38`。2026-10-22 の修正で `flow-model` に 3 件を追加）。2026-11-23 に `gas-slots` の 4 件と `gas-menu` の 3 件を追加し、45 件。
 
 | テストファイル | 件数 | 対象 |
 | --- | --- | --- |
@@ -577,6 +577,7 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 | `tests/sequence-model.test.cjs` | 6 | 参照データ（47 手順）の取り込み、JSON 出力の取り込み（スクリプト非実行）、リテラル解析器の拒否、不正参照、フローからの生成、不正設定の正規化 |
 | `tests/sequence-render.test.cjs` | 4 | 47 手順の配置範囲、長い文言・自己宛の行の高さ、エスケープ、共有 HTML のデータ埋め込み |
 | `tests/gas-slots.test.cjs` | 4 | `CalendarToSheet.gs` と `Shift.gs` を `vm` で読み込み（`Utilities.formatDate` などはスタブ）、予定を時間枠に割り当てる処理を検査: 刻みの境目からずれた予定、最後の枠、時間帯の外、先に入った予定の優先、日をまたぐ予定、刻みの推定、`Shift.gs` の 15 分枠 |
+| `tests/gas-menu.test.cjs` | 3 | `Shift.gs` の `onOpen` のメニュー項目と、使い方シートの「■ メニュー」・案内文・推奨ワークフローで示すメニュー名の一致 |
 
 - テストが対象にしない領域: DOM を伴う `render`、`saveDraft`、`importBoardFile` の分岐、IndexedDB、ポインター操作、PNG 出力、iframe の `sandbox`。`CalendarToSheet.gs` と `Shift.gs` は、時間枠の割り当て（`cts_eventSlotRange_`、`buildSlotData_`、`shift_eventSlotRange_`）だけを `tests/gas-slots.test.cjs` が検査する。
 
@@ -590,7 +591,6 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 | 要確認 | `CalendarToSheet.gs` で終日予定を「しない」にすると終日予定は出力されない（仕様どおり。見送り）。日をまたぐ予定は 2026-11-23 に直した（下の「修正済み（2026-11-23）」） |
 | 要確認 | `Shift.gs` の `空き時間抽出: 実シフト優先キーワード` は、組織名を含む `【作業】鹿島_SES` が既定値で、設定を空欄にしても既定値に戻る（`getOperationConfig_`）。別の組織で使う場合は明示的な書き換えが必要（利用者の組織向けの既定値のため変更しない。README に明記） |
 | 要確認 | `Shift.gs` のバックアップは書き込むだけで、復元する関数・メニューが無い。巻き戻しは `__シフトバックアップ` シートを手作業で参照する（見送り。README に明記） |
-| 要確認 | `Shift.gs` の使い方シートと案内文には、実際のメニュー項目名と食い違うものが残っている（例: 「集計のみ更新」→ 実際は「③ 集計を更新」、「シフトを自動入力（空き枠のみ）」→「② シフトを自動作成（空き枠のみ）」、「シフトを自動入力（全クリア）」→「シフトを自動作成（全クリア）」、「設定シートを初期化」→「設定シートを作成/初期化」、「指定期間だけ組みなおす」→「②-2 指定期間だけ組みなおす」）。「① カレンダー予定を反映」だけは今回そろえた |
 | 要確認 | `fillShortageOnlySafely` は、同時刻の人数上限と同時禁止相手は自動割当本体と同じ判定になったが、`canAssign` が見る「1 日の担当者上限」と「1 人 1 日の最大時間（8 時間）」、前後 1h ブロック以外の制約（E 目標など）は見ない |
 | 要確認 | 取得に失敗したカレンダーの人は、自動割当・不足補填では「予定なし」として扱われたまま処理が進む（警告・確認ダイアログには出る）。失敗した人がいるときに処理を中止するかどうかは、運用の判断が要る |
 | 未実装（明記済み） | `Shift.gs` の「キーワードルール」シートは `優先割当`、`低優先`、`重複許容` を選べるが、`syncKeywordRulesToSettings` が反映するのは `強制シフト`、`割当不可`、`終日除外` だけ。`前後バッファ分` と `対象` 列も使われない。見出し注記・反映後のダイアログ・使い方シート・README に「未対応」と明記した（挙動は変えていない） |
@@ -606,6 +606,7 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 | `CalendarToSheet.gs` の `buildSlotData_` と `Shift.gs` の `fillAllEvents` が「最初の t >= 開始」から「最初の t >= 終了」の手前までのスロットに予定を入れていたため、刻みの境目からずれた予定（30 分刻みで 09:05〜09:20 など）が時間割に出ない、または一部の枠にしか出ない | 予定と重なるスロットすべてに入れる（`cts_eventSlotRange_`、`shift_eventSlotRange_`）。`Shift.gs` は空き判定（`computeAvailabilityMatrix`）と同じ重なりの判定になった |
 | `CalendarToSheet.gs` が日をまたぐ予定を時間割に出さない（前日から続く予定も、翌日まで続く予定も） | 当日にかかる部分だけを出す。`Shift.gs` の日付シートも同じ |
 | `.gs` に自動テストが無い | `tests/gas-slots.test.cjs`（4 件）を追加。Apps Script の実機では未確認 |
+| `Shift.gs` の使い方シートと案内文のメニュー名が実際のメニュー項目と食い違う（「集計のみ更新」「シフトを自動入力（空き枠のみ）」「シフトを自動入力（全クリア）」「設定シートを初期化」「指定期間だけ組みなおす」） | `onOpen` の項目名（「③ 集計を更新」「② シフトを自動作成（空き枠のみ）」「シフトを自動作成（全クリア）」「設定シートを作成/初期化」「②-2 指定期間だけ組みなおす」）にそろえた。`tests/gas-menu.test.cjs` が、使い方シートの「■ メニュー」と案内文のメニュー名が `onOpen` の項目にあることを検査する |
 
 ### 修正済み（2026-10-22）
 
@@ -634,4 +635,4 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 - [index.html](../index.html) — 業務フロー作成ツール本体
 - [CalendarToSheet.gs](../CalendarToSheet.gs) — カレンダー転記スクリプト
 - [Shift.gs](../Shift.gs) — シフト自動割当スクリプト
-- `tests/` — [flow-model.test.cjs](../tests/flow-model.test.cjs)、[sequence-model.test.cjs](../tests/sequence-model.test.cjs)、[sequence-render.test.cjs](../tests/sequence-render.test.cjs)、[gas-slots.test.cjs](../tests/gas-slots.test.cjs)
+- `tests/` — [flow-model.test.cjs](../tests/flow-model.test.cjs)、[sequence-model.test.cjs](../tests/sequence-model.test.cjs)、[sequence-render.test.cjs](../tests/sequence-render.test.cjs)、[gas-slots.test.cjs](../tests/gas-slots.test.cjs)、[gas-menu.test.cjs](../tests/gas-menu.test.cjs)
