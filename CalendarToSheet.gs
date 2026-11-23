@@ -204,7 +204,7 @@ function extractCalendarToSheet() {
     userSlots: cfg.users.map(u => {
       const fetched = fetchEvents_(u.email, date);
       if (fetched.error) recordFetchError_(fetchErrors, u, fetched.error);
-      return buildSlotData_(fetched.events, timeSlots, date, cfg.fetchAllDay);
+      return buildSlotData_(fetched.events, timeSlots, date, cfg.fetchAllDay, cfg.stepMinutes);
     }),
   }));
   const fetchErrorText = formatFetchErrors_(fetchErrors, days.length);
@@ -393,7 +393,7 @@ function formatFetchErrors_(errors, totalDays) {
  *   slots  … 時間指定の予定（各スロットの予定タイトル or ''）
  *   allDay … 終日予定のタイトルをまとめた文字列（fetchAllDay=false のときは常に ''）
  */
-function buildSlotData_(events, timeSlots, date, fetchAllDay) {
+function buildSlotData_(events, timeSlots, date, fetchAllDay, stepMinutes) {
   const slotData = new Array(timeSlots.length).fill('');
   const allDayTitles = [];
 
@@ -410,25 +410,45 @@ function buildSlotData_(events, timeSlots, date, fetchAllDay) {
     // 題名が数式として評価されないよう、時間スロットに書く題名を文字列として安全にする。
     title = cts_safeCellText_(title);
 
-    let startStr, endStr;
+    let range;
     try {
-      startStr = Utilities.formatDate(event.getStartTime(), 'JST', 'HH:mm');
-      endStr = Utilities.formatDate(event.getEndTime(), 'JST', 'HH:mm');
+      range = cts_eventSlotRange_(event.getStartTime(), event.getEndTime(), date, timeSlots, stepMinutes);
     } catch (e) {
       return;
     }
 
-    let startIdx = timeSlots.findIndex(t => t >= startStr);
-    let endIdx = timeSlots.findIndex(t => t >= endStr);
-    if (startIdx === -1) return;              // 表示時間帯より後の予定
-    if (endIdx === -1) endIdx = timeSlots.length; // 表示時間帯の終わりまで続く
-
-    for (let i = startIdx; i < endIdx; i++) {
+    for (let i = range.from; i < range.to; i++) {
       if (!slotData[i]) slotData[i] = title;
     }
   });
 
   return { slots: slotData, allDay: cts_safeCellText_(allDayTitles.join(' / ')) };
+}
+
+/**
+ * 予定がかかる時間枠の範囲 { from, to }（to は含まない）。枠 i は timeSlots[i] から次の枠まで（最後の枠は
+ * 時間刻みの分）。刻みの境目からずれた予定（30 分刻みで 09:05〜09:20 など）も、重なる枠すべてに入れる。
+ * 前日から続く予定は当日 0:00 から、翌日まで続く予定は当日 24:00 までとして扱う。
+ * stepMinutes を省くと枠の間隔から求める（枠が 1 つなら 15 分）。
+ */
+function cts_eventSlotRange_(startTime, endTime, date, timeSlots, stepMinutes) {
+  const none = { from: 0, to: 0 };
+  const day = fmtDate_(date);
+  if (fmtDate_(startTime) > day || fmtDate_(endTime) < day) return none;
+  const toMinutes = hhmm => { const p = hhmm.split(':').map(Number); return p[0] * 60 + p[1]; };
+  const startMin = fmtDate_(startTime) < day ? 0 : toMinutes(Utilities.formatDate(startTime, 'JST', 'HH:mm'));
+  const endMin = fmtDate_(endTime) > day ? 24 * 60 : toMinutes(Utilities.formatDate(endTime, 'JST', 'HH:mm'));
+  const slots = timeSlots.map(toMinutes);
+  const step = stepMinutes > 0 ? stepMinutes : (slots.length > 1 ? slots[1] - slots[0] : 15);
+  let from = -1, to = -1;
+  for (let i = 0; i < slots.length; i++) {
+    const slotEnd = i + 1 < slots.length ? slots[i + 1] : slots[i] + step;
+    if (slots[i] < endMin && slotEnd > startMin) {
+      if (from < 0) from = i;
+      to = i + 1;
+    }
+  }
+  return from < 0 ? none : { from, to };
 }
 
 /** ===================== 出力（縦向き） =====================

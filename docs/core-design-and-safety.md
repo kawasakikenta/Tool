@@ -21,7 +21,7 @@
 | テキスト記法の解析・自動配置・保存形式 | `index.html` の `// BEGIN FLOW MODEL` 〜 `// END FLOW MODEL`（`parse`、`layout`、`routeConnections`、`readSettings`） |
 | シーケンス図のデータ検証・取り込み | `index.html` の `// BEGIN SEQUENCE MODEL` 〜 `// END SEQUENCE MODEL`、描画は `// BEGIN SEQUENCE RENDER` 〜 `// END SEQUENCE RENDER` |
 | 画面操作・保存・出力 | `index.html` の `render`、`commitDocument`、`saveDraft`、`importBoardFile`、`exportSvg` |
-| 回帰テスト | `tests/flow-model.test.cjs`、`tests/sequence-model.test.cjs`、`tests/sequence-render.test.cjs` |
+| 回帰テスト | `tests/flow-model.test.cjs`、`tests/sequence-model.test.cjs`、`tests/sequence-render.test.cjs`、`tests/gas-slots.test.cjs`（`.gs` の時間枠の割り当て） |
 | カレンダー転記の仕様 | `CalendarToSheet.gs`（先頭コメントと `extractCalendarToSheet`） |
 | シフト自動割当の仕様 | `Shift.gs`（`autoAssignShifts`、`computeAvailabilityMatrix`、`getOperationConfig_`） |
 | エージェント運用 | `CLAUDE.md`、`AGENTS.md`、`docs/agent-orchestration.md` |
@@ -404,9 +404,9 @@ A1 形式:         /^([A-Z]+)(\d+)$/
 | 処理の判定 | 実装 | 結果 |
 | --- | --- | --- |
 | 予定の取得 | `fetchEvents_`: `CalendarApp.getCalendarById(email)`。その日の 00:00:00.000〜23:59:59.999。出欠が `NO`（辞退）の予定は除外 | `{events, error}` を返す。カレンダーが見つからない、または例外なら `events` は空配列で `error` に理由（呼び出し側が `recordFetchError_` で集計し、完了ダイアログとログに「名前（メール）・理由・失敗日数」を出す） |
-| スロット割り付け | `buildSlotData_`: `HH:mm` 文字列を JST で作り、`startIdx = 最初の t >= 開始`、`endIdx = 最初の t >= 終了`。同じスロットに複数の予定があれば先に処理した予定を優先 | 開始がスロットの途中なら次のスロットから、終了が途中なら手前のスロットまで |
-| 時間帯の外 | 開始が最後のスロットより後なら無視。終了が時間帯より後なら最後まで | 時間帯より前に始まる予定は先頭から |
-| 日をまたぐ予定 | 終了の `HH:mm` が開始より小さいと `endIdx <= startIdx` になり、`for` が回らない | 表示されない（コード上の挙動） |
+| スロット割り付け | `buildSlotData_` → `cts_eventSlotRange_`: スロット i を `[timeSlots[i], 次のスロット)`（最後は時間刻みの分）とし、予定 `[開始, 終了)` と重なるスロットすべてに入れる。同じスロットに複数の予定があれば先に処理した予定を優先 | 刻みの境目からずれた予定（30 分刻みで 09:05〜09:20 など）も、かかるスロットに入る |
+| 時間帯の外 | どのスロットとも重ならない予定は入れない | 時間帯より前に始まる予定・後まで続く予定は、時間帯の中の部分だけ |
+| 日をまたぐ予定 | 当日の日付（JST）と比べ、前日から続く予定は 0:00 から、翌日まで続く予定は 24:00 までとして扱う | 当日にかかる部分だけ表示される |
 | 終日予定 | `cts_isAllDayEventSafe_`。`fetchAllDay` が真なら題名を ` / ` で連結して専用欄へ、偽なら捨てる | 時間スロットには入れない |
 | タイトル | `getTitle()` が例外または空 | `(予定)` |
 | 題名の数式対策 | `cts_safeCellText_`: 先頭が `=`、`+`、`-`、`@` の題名（時間スロットの題名と、連結した終日予定の文字列）の先頭にアポストロフィを付ける | セルへは文字列として書かれ、数式として評価されない（実機での表示は未検証。7 章） |
@@ -569,15 +569,16 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 
 - `package.json` は無く、ビルド・lint・CI も無い。`.github/workflows` は存在しない。
 - テストは Node 標準の `node:test` で、`node --test tests/*.test.cjs` を実行する。`index.html` の `BEGIN/END` マーカーの間を `vm` で取り出して評価するため、本番コードと同じ実装を検査する。
-- 資料作成時に実行し、38 件すべて成功した（`tests 38`、`pass 38`。2026-10-22 の修正で `flow-model` に 3 件を追加）。
+- 資料作成時に実行し、38 件すべて成功した（`tests 38`、`pass 38`。2026-10-22 の修正で `flow-model` に 3 件を追加）。2026-11-23 に `gas-slots` の 4 件を追加し、42 件。
 
 | テストファイル | 件数 | 対象 |
 | --- | --- | --- |
 | `tests/flow-model.test.cjs` | 28 | 記法の解析（引用符・ASCII 矢印・CRLF 維持）、線の文字編集・図形挿入・重複出現の同時編集、循環、表示名変更、レーン編集、並行辺、縦横レイアウト、遠い接続、設定の保持、壊れた `# @flow` 行の検出と保存時の保持、ノード属性、接続、削除、ドラッグ座標、不正座標の丸め、メディア（不正 URL・重複 ID・寸法）、ボード検証 |
 | `tests/sequence-model.test.cjs` | 6 | 参照データ（47 手順）の取り込み、JSON 出力の取り込み（スクリプト非実行）、リテラル解析器の拒否、不正参照、フローからの生成、不正設定の正規化 |
 | `tests/sequence-render.test.cjs` | 4 | 47 手順の配置範囲、長い文言・自己宛の行の高さ、エスケープ、共有 HTML のデータ埋め込み |
+| `tests/gas-slots.test.cjs` | 4 | `CalendarToSheet.gs` と `Shift.gs` を `vm` で読み込み（`Utilities.formatDate` などはスタブ）、予定を時間枠に割り当てる処理を検査: 刻みの境目からずれた予定、最後の枠、時間帯の外、先に入った予定の優先、日をまたぐ予定、刻みの推定、`Shift.gs` の 15 分枠 |
 
-- テストが対象にしない領域: DOM を伴う `render`、`saveDraft`、`importBoardFile` の分岐、IndexedDB、ポインター操作、PNG 出力、iframe の `sandbox`。`CalendarToSheet.gs` と `Shift.gs` には自動テストが無い。
+- テストが対象にしない領域: DOM を伴う `render`、`saveDraft`、`importBoardFile` の分岐、IndexedDB、ポインター操作、PNG 出力、iframe の `sandbox`。`CalendarToSheet.gs` と `Shift.gs` は、時間枠の割り当て（`cts_eventSlotRange_`、`buildSlotData_`、`shift_eventSlotRange_`）だけを `tests/gas-slots.test.cjs` が検査する。
 
 ## 9. 既知の制約と資料との食い違い
 
@@ -586,7 +587,7 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 | 区分 | 内容 |
 | --- | --- |
 | 要確認 | `CalendarToSheet.gs` の `createCalendarConfigSheet` は、対象カレンダーの見出し行を `CTS_USER_START_ROW - 1`（11 行目）に書くが、11 行目は基本設定の「出力方法」の行でもある。作成直後の設定シートでは B11 が `メールアドレス` で上書きされ、`readCalendarConfig_` の出力方法の判定は常に「日付ごとに分ける」になる（「1シートにまとめる」を選べない）。直すには見出し行をずらす必要があり、既存の設定シートでは対象カレンダーの開始行（12 行目）も変わるため、今回は直していない。README に注意を書いた |
-| 要確認 | `CalendarToSheet.gs` は日をまたぐ予定（終了時刻の `HH:mm` が開始より小さい）を時間割に出さない。終日予定を「しない」にすると終日予定は出力されない（仕様どおり。見送り） |
+| 要確認 | `CalendarToSheet.gs` で終日予定を「しない」にすると終日予定は出力されない（仕様どおり。見送り）。日をまたぐ予定は 2026-11-23 に直した（下の「修正済み（2026-11-23）」） |
 | 要確認 | `Shift.gs` の `空き時間抽出: 実シフト優先キーワード` は、組織名を含む `【作業】鹿島_SES` が既定値で、設定を空欄にしても既定値に戻る（`getOperationConfig_`）。別の組織で使う場合は明示的な書き換えが必要（利用者の組織向けの既定値のため変更しない。README に明記） |
 | 要確認 | `Shift.gs` のバックアップは書き込むだけで、復元する関数・メニューが無い。巻き戻しは `__シフトバックアップ` シートを手作業で参照する（見送り。README に明記） |
 | 要確認 | `Shift.gs` の使い方シートと案内文には、実際のメニュー項目名と食い違うものが残っている（例: 「集計のみ更新」→ 実際は「③ 集計を更新」、「シフトを自動入力（空き枠のみ）」→「② シフトを自動作成（空き枠のみ）」、「シフトを自動入力（全クリア）」→「シフトを自動作成（全クリア）」、「設定シートを初期化」→「設定シートを作成/初期化」、「指定期間だけ組みなおす」→「②-2 指定期間だけ組みなおす」）。「① カレンダー予定を反映」だけは今回そろえた |
@@ -597,6 +598,14 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 | 本資料では扱わない | `Shift.gs` の次の領域は読んでいない、または概要のみ。`createSettingsSheet`（設定シートの初期レイアウト）、`createDocsSheet`（使い方シートの本文）、`extractFreeTimeCore_` の後半と `writeFreeTimeTablesToSettings`、`createTestSimulationSheet`、`createUserAttributesSheet`、`createWeeklyAssignmentSheet`、`updateSettingsTotals` の集計式、`autoAssignShifts` 内の日次ペア保証・月間目標上乗せ・単独禁止・飛び飛び整理・短い孤立解消の細部の条件（`canPairCell`、`canTopUpCell` など） |
 | 本資料では扱わない | `index.html` の CSS（8〜179 行）と、画面ごとのラベル・アイコン定義、シーケンス描画（`renderSequenceDiagram`）の座標の細部 |
 | 未検証 | `.gs` は Apps Script 上では実行していない（2026-10-22 の修正では、時刻の比較・ロックの復元計画・題名の無害化・取得失敗の集計・不足補填の判定などを、Apps Script の API をスタブにして `node:vm` で確認しただけで、リポジトリのテストには含めていない）。Google サービスの制限（実行時間、呼び出し回数）に対する実測も無い。`index.html` のブラウザ上の動作（警告帯の表示を含む）もこの資料では確認していない |
+
+### 修正済み（2026-11-23）
+
+| 修正前の食い違い | 修正後 |
+| --- | --- |
+| `CalendarToSheet.gs` の `buildSlotData_` と `Shift.gs` の `fillAllEvents` が「最初の t >= 開始」から「最初の t >= 終了」の手前までのスロットに予定を入れていたため、刻みの境目からずれた予定（30 分刻みで 09:05〜09:20 など）が時間割に出ない、または一部の枠にしか出ない | 予定と重なるスロットすべてに入れる（`cts_eventSlotRange_`、`shift_eventSlotRange_`）。`Shift.gs` は空き判定（`computeAvailabilityMatrix`）と同じ重なりの判定になった |
+| `CalendarToSheet.gs` が日をまたぐ予定を時間割に出さない（前日から続く予定も、翌日まで続く予定も） | 当日にかかる部分だけを出す。`Shift.gs` の日付シートも同じ |
+| `.gs` に自動テストが無い | `tests/gas-slots.test.cjs`（4 件）を追加。Apps Script の実機では未確認 |
 
 ### 修正済み（2026-10-22）
 
@@ -625,4 +634,4 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 - [index.html](../index.html) — 業務フロー作成ツール本体
 - [CalendarToSheet.gs](../CalendarToSheet.gs) — カレンダー転記スクリプト
 - [Shift.gs](../Shift.gs) — シフト自動割当スクリプト
-- `tests/` — [flow-model.test.cjs](../tests/flow-model.test.cjs)、[sequence-model.test.cjs](../tests/sequence-model.test.cjs)、[sequence-render.test.cjs](../tests/sequence-render.test.cjs)
+- `tests/` — [flow-model.test.cjs](../tests/flow-model.test.cjs)、[sequence-model.test.cjs](../tests/sequence-model.test.cjs)、[sequence-render.test.cjs](../tests/sequence-render.test.cjs)、[gas-slots.test.cjs](../tests/gas-slots.test.cjs)

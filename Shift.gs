@@ -461,7 +461,7 @@ function updateTeamCalendarSheets() {
     }
 
     setupLayout(sheet, users, timeSlots, targetDate);
-    fillAllEvents(sheet, users, allUserEvents, timeSlots);
+    fillAllEvents(sheet, users, allUserEvents, timeSlots, targetDate);
     addDailyTotalsRow(sheet, users, timeSlots);
 
     if (savedShiftMap) {
@@ -4222,7 +4222,7 @@ function shift_safeCellText_(value) {
   return /^[=+\-@]/.test(s) ? "'" + s : s;
 }
 
-function fillAllEvents(sheet, users, allUserEvents, timeSlots) {
+function fillAllEvents(sheet, users, allUserEvents, timeSlots, targetDate) {
   users.forEach((user, userIdx) => {
     const col = userIdx + 2;
     const events = allUserEvents[userIdx];
@@ -4244,15 +4244,8 @@ function fillAllEvents(sheet, users, allUserEvents, timeSlots) {
         return;
       }
 
-      const startStr = Utilities.formatDate(event.getStartTime(), 'JST', 'HH:mm');
-      const endStr = Utilities.formatDate(event.getEndTime(), 'JST', 'HH:mm');
-
-      let startIdx = timeSlots.findIndex(t => t >= startStr);
-      let endIdx = timeSlots.findIndex(t => t >= endStr);
-      if (startIdx === -1) return;
-      if (endIdx === -1) endIdx = timeSlots.length;
-
-      for (let i = startIdx; i < endIdx; i++) {
+      const range = shift_eventSlotRange_(event.getStartTime(), event.getEndTime(), targetDate, timeSlots);
+      for (let i = range.from; i < range.to; i++) {
         if (!slotData[i]) slotData[i] = event.getTitle();
       }
     });
@@ -4517,6 +4510,26 @@ function sumArray(arr) {
 
 function shift_isAllDayEventSafe_(event) {
   try { return event.isAllDayEvent(); } catch (e) { return false; }
+}
+
+/**
+ * 予定がかかる 15 分枠の範囲 { from, to }（to は含まない）。空き判定（computeAvailabilityMatrix など）と同じく、
+ * 枠 [開始, 開始+15分) と予定 [開始, 終了) が重なれば入れる。刻みの境目からずれた予定（09:05〜09:20 など）も
+ * かかる枠すべてに入り、前日から・翌日まで続く予定は当日の部分だけが入る。
+ */
+function shift_eventSlotRange_(startTime, endTime, targetDate, timeSlots) {
+  const startMs = startTime.getTime();
+  const endMs = endTime.getTime();
+  let from = -1, to = -1;
+  for (let i = 0; i < timeSlots.length; i++) {
+    const slotStart = parseSlotTime(targetDate, timeSlots[i]).getTime();
+    const slotEnd = slotStart + 15 * 60 * 1000;
+    if (slotStart < endMs && slotEnd > startMs) {
+      if (from < 0) from = i;
+      to = i + 1;
+    }
+  }
+  return from < 0 ? { from: 0, to: 0 } : { from, to };
 }
 
 function generateTimeSlots(startStr, endStr) {
