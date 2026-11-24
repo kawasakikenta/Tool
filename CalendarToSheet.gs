@@ -306,8 +306,12 @@ function readCalendarConfig_(ss) {
   if (!destSheetName) return { error: '「貼り付け先シート名」を入力してください。' };
   const cell = parseA1_(destCellA1);
   if (!cell) return { error: `「貼り付け開始セル」が不正です: ${destCellA1}（例: A1）` };
-  if (!startDate) return { error: '「期間開始日」を yyyy-MM-dd 形式で入力してください。' };
-  if (!endDate) return { error: '「期間終了日」を yyyy-MM-dd 形式で入力してください。' };
+  // 形式は合っているのに読めない日付（2026-11-31 など）は、形式ではなく日付そのものの誤りとして知らせる。
+  const dateError = (label, raw) => /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(raw)
+    ? `「${label}」の ${raw} は存在しない日付です（月末の日・うるう年を確認してください）。`
+    : `「${label}」を yyyy-MM-dd 形式で入力してください。`;
+  if (!startDate) return { error: dateError('期間開始日', get(5)) };
+  if (!endDate) return { error: dateError('期間終了日', get(6)) };
   if (endDate.getTime() < startDate.getTime()) {
     return { error: '「期間終了日」は「期間開始日」以降にしてください。' };
   }
@@ -737,7 +741,11 @@ function parseDateCell_(str) {
   const s = String(str).trim();
   const m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (m) {
-    return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    const y = parseInt(m[1], 10), mo = parseInt(m[2], 10), d = parseInt(m[3], 10);
+    const date = new Date(y, mo - 1, d);
+    // 2026-11-31 を 12 月 1 日にするような繰り越しはしない（Shift.gs の parseInputDate_ と同じ）。
+    if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d) return null;
+    return date;
   }
   const d = new Date(s);
   if (!isNaN(d.getTime())) return new Date(d.getFullYear(), d.getMonth(), d.getDate());
