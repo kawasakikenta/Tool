@@ -34,8 +34,15 @@
 
 /** 設定シート名 */
 const CTS_CONFIG_SHEET = 'カレンダー設定';
-/** 設定シートのユーザー一覧が始まる行（1始まり） */
-const CTS_USER_START_ROW = 12;
+/** 設定シートの基本設定の最後の行（出力方法） */
+const CTS_OUTPUT_ROW = 11;
+/** 設定シートのユーザー一覧が始まる行（1始まり）。見出し行は出力方法の行の次（12 行目） */
+const CTS_USER_START_ROW = 13;
+/**
+ * 出力方法の行がない古い設定シートのユーザー一覧の開始行。以前の「① 設定シートを作成」は見出し行を
+ * 11 行目に書いて出力方法の行を上書きしていたため、そのシートでは 12 行目から読む。
+ */
+const CTS_LEGACY_USER_START_ROW = 12;
 /** 既定の予定セル背景色（設定で色未指定のユーザーに使う） */
 const CTS_DEFAULT_BG = '#d1eaff';
 const CTS_DEFAULT_FONT = '#000000';
@@ -256,7 +263,11 @@ function extractCalendarToSheet() {
     `・終日予定: ${cfg.fetchAllDay ? '別枠で取得' : '取得しない'}\n` +
     `・対象: ${cfg.users.length}名\n` +
     `・作成シート: ${sheetNames.join(', ')}` +
-    (fetchErrorText ? `\n\n${fetchErrorText}` : ''),
+    (fetchErrorText ? `\n\n${fetchErrorText}` : '') +
+    (cfg.legacyLayout
+      ? `\n\n※ この「${CTS_CONFIG_SHEET}」シートには出力方法の行がありません（以前の版で作成）。` +
+        '「1シートにまとめる」を使うには、入力済みの内容を控えてから「① 設定シートを作成」で作り直してください。'
+      : ''),
     ui.ButtonSet.OK
   );
 }
@@ -287,8 +298,10 @@ function readCalendarConfig_(ss) {
   const endTime = timeOrDefault_(get(8), '18:00', '終了時刻（B8）', notices);
   const stepMinutes = stepOrDefault_(get(9), 15, '時間刻み（B9）', notices);
   const fetchAllDay = !/しない|no|false/i.test(get(10));
-  // 出力方法: 「まとめる」以外（＝分ける/未入力）はすべて日付ごとに分ける
-  const splitByDay = !/まとめ|1シート|一シート|together|single/i.test(get(11));
+  // 出力方法: 「まとめる」以外（＝分ける/未入力）はすべて日付ごとに分ける。
+  // 11 行目が出力方法の行でない古い設定シート（見出し行が上書きしている）も、これまでどおり分ける。
+  const hasOutputRow = cts_hasOutputRow_(sheet);
+  const splitByDay = !hasOutputRow || !/まとめ|1シート|一シート|together|single/i.test(get(CTS_OUTPUT_ROW));
 
   if (!destSheetName) return { error: '「貼り付け先シート名」を入力してください。' };
   const cell = parseA1_(destCellA1);
@@ -301,9 +314,10 @@ function readCalendarConfig_(ss) {
   const orientation = /横|よこ|horizontal/i.test(orientationRaw) ? '横' : '縦';
 
   // ユーザー一覧
-  const users = readCalendarUsers_(sheet);
+  const userStartRow = hasOutputRow ? CTS_USER_START_ROW : CTS_LEGACY_USER_START_ROW;
+  const users = readCalendarUsers_(sheet, userStartRow);
   if (users.length === 0) {
-    return { error: `取得対象のカレンダーが未登録です（${CTS_USER_START_ROW}行目以降に名前とメールを入力）。` };
+    return { error: `取得対象のカレンダーが未登録です（${userStartRow}行目以降に名前とメールを入力）。` };
   }
 
   return {
@@ -313,14 +327,20 @@ function readCalendarConfig_(ss) {
     startTime, endTime, stepMinutes,
     fetchAllDay, splitByDay,
     users, notices,
+    legacyLayout: !hasOutputRow,
   };
 }
 
-function readCalendarUsers_(sheet) {
+/** 11 行目が「出力方法」の行か（以前の版で作った設定シートでは、対象カレンダーの見出し行が上書きしている） */
+function cts_hasOutputRow_(sheet) {
+  return /^出力方法/.test(String(sheet.getRange(CTS_OUTPUT_ROW, 1).getDisplayValue()).trim());
+}
+
+function readCalendarUsers_(sheet, startRow) {
   const lastRow = sheet.getLastRow();
-  if (lastRow < CTS_USER_START_ROW) return [];
-  const n = lastRow - CTS_USER_START_ROW + 1;
-  const range = sheet.getRange(CTS_USER_START_ROW, 1, n, 3);
+  if (lastRow < startRow) return [];
+  const n = lastRow - startRow + 1;
+  const range = sheet.getRange(startRow, 1, n, 3);
   const values = range.getValues();
   const bgs = range.getBackgrounds();
   const fonts = range.getFontColors();

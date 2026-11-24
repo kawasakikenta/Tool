@@ -21,7 +21,7 @@
 | テキスト記法の解析・自動配置・保存形式 | `index.html` の `// BEGIN FLOW MODEL` 〜 `// END FLOW MODEL`（`parse`、`layout`、`routeConnections`、`readSettings`） |
 | シーケンス図のデータ検証・取り込み | `index.html` の `// BEGIN SEQUENCE MODEL` 〜 `// END SEQUENCE MODEL`、描画は `// BEGIN SEQUENCE RENDER` 〜 `// END SEQUENCE RENDER` |
 | 画面操作・保存・出力 | `index.html` の `render`、`commitDocument`、`saveDraft`、`importBoardFile`、`exportSvg` |
-| 回帰テスト | `tests/flow-model.test.cjs`、`tests/sequence-model.test.cjs`、`tests/sequence-render.test.cjs`、`tests/gas-slots.test.cjs`（`.gs` の時間枠の割り当て）、`tests/gas-menu.test.cjs`（`Shift.gs` のメニュー名） |
+| 回帰テスト | `tests/flow-model.test.cjs`、`tests/sequence-model.test.cjs`、`tests/sequence-render.test.cjs`、`tests/gas-slots.test.cjs`（`.gs` の時間枠の割り当て）、`tests/gas-menu.test.cjs`（`Shift.gs` のメニュー名）、`tests/gas-config.test.cjs`（`CalendarToSheet.gs` の設定シート） |
 | カレンダー転記の仕様 | `CalendarToSheet.gs`（先頭コメントと `extractCalendarToSheet`） |
 | シフト自動割当の仕様 | `Shift.gs`（`autoAssignShifts`、`computeAvailabilityMatrix`、`getOperationConfig_`） |
 | エージェント運用 | `CLAUDE.md`、`AGENTS.md`、`docs/agent-orchestration.md` |
@@ -373,7 +373,7 @@ HTML エンティティ: /&(?:amp|lt|gt|quot|apos|#39|#x[0-9a-f]+|#[0-9]+);/gi
 
 ### 5.9 CalendarToSheet.gs: 判定条件
 
-設定は `カレンダー設定` シート。B2〜B11 が基本設定（キーと値の 2 列）、12 行目から対象カレンダー（`CTS_USER_START_ROW = 12`）。定数は `CTS_DEFAULT_BG = '#d1eaff'`、`CTS_DEFAULT_FONT = '#000000'`。
+設定は `カレンダー設定` シート。B2〜B11 が基本設定（キーと値の 2 列。11 行目が出力方法 `CTS_OUTPUT_ROW`）、12 行目が対象カレンダーの見出し、13 行目から対象カレンダー（`CTS_USER_START_ROW = 13`）。A11 が `出力方法` で始まらない設定シート（2026-11-24 より前の版の「① 設定シートを作成」が見出し行を 11 行目に書き、出力方法の行を上書きしていたもの）は、12 行目から対象カレンダーを読み（`CTS_LEGACY_USER_START_ROW`）、出力方法は日付ごとに分割とする（`cts_hasOutputRow_`、`legacyLayout`）。定数は `CTS_DEFAULT_BG = '#d1eaff'`、`CTS_DEFAULT_FONT = '#000000'`。
 
 | 設定（セル） | 実装 | 不正・未入力のとき |
 | --- | --- | --- |
@@ -384,9 +384,9 @@ HTML エンティティ: /&(?:amp|lt|gt|quot|apos|#39|#x[0-9a-f]+|#[0-9]+);/gi
 | 開始・終了時刻（B7、B8） | `timeOrDefault_`（`parseTimeStr_`: 時 0〜23、分 0〜59） | 不正・未入力は `09:00`、`18:00` に置換し、理由を `notices` に残して実行前に `設定の確認` ダイアログ（OK / キャンセル）で示す |
 | 時間刻み（B9） | `stepOrDefault_`: `parseInt` の結果が 1 以上でなければ 15（(G) を参照）。`generateTimeSlots_` も 0 以下を 15 に戻す | 不正・0・負・未入力は 15 とし、開始・終了時刻と同じダイアログで示す |
 | 終日予定の取得（B10） | (G) の `しない`、`no`、`false` のいずれかに一致しなければ取得する | 未入力は取得する |
-| 出力方法（B11） | (G) の `まとめ`、`1シート`、`一シート`、`together`、`single` に一致すれば 1 シート、それ以外は日付ごとに分割 | 未入力は日付ごとに分割 |
+| 出力方法（B11） | A11 が `出力方法` で始まるときだけ読む。(G) の `まとめ`、`1シート`、`一シート`、`together`、`single` に一致すれば 1 シート、それ以外は日付ごとに分割 | 未入力・出力方法の行がない古い設定シートは日付ごとに分割（古い設定シートでは完了ダイアログで作り直しを案内） |
 | 時間帯が空 | `generateTimeSlots_` の結果が 0 件（終了が開始以前など） | `設定エラー` のダイアログを出して中止 |
-| 対象カレンダー | 12 行目以降の A 列（名前）、B 列（メール）、C 列（背景色）。名前とメールが非空でメールに `@` を含む行だけ採用。C 列が白または未設定なら既定色 | 1 行も無ければ `取得対象のカレンダーが未登録です` |
+| 対象カレンダー | 13 行目以降（古い設定シートは 12 行目以降）の A 列（名前）、B 列（メール）、C 列（背景色）。名前とメールが非空でメールに `@` を含む行だけ採用。C 列が白または未設定なら既定色 | 1 行も無ければ `取得対象のカレンダーが未登録です` |
 
 
 ```text
@@ -569,7 +569,7 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 
 - `package.json` は無く、ビルド・lint・CI も無い。`.github/workflows` は存在しない。
 - テストは Node 標準の `node:test` で、`node --test tests/*.test.cjs` を実行する。`index.html` の `BEGIN/END` マーカーの間を `vm` で取り出して評価するため、本番コードと同じ実装を検査する。
-- 資料作成時に実行し、38 件すべて成功した（`tests 38`、`pass 38`。2026-10-22 の修正で `flow-model` に 3 件を追加）。2026-11-23 に `gas-slots` の 4 件と `gas-menu` の 3 件を追加し、45 件。
+- 資料作成時に実行し、38 件すべて成功した（`tests 38`、`pass 38`。2026-10-22 の修正で `flow-model` に 3 件を追加）。2026-11-23 に `gas-slots` の 4 件と `gas-menu` の 3 件を追加し、45 件。2026-11-24 に `gas-config` の 2 件を追加し、47 件。
 
 | テストファイル | 件数 | 対象 |
 | --- | --- | --- |
@@ -578,8 +578,9 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 | `tests/sequence-render.test.cjs` | 4 | 47 手順の配置範囲、長い文言・自己宛の行の高さ、エスケープ、共有 HTML のデータ埋め込み |
 | `tests/gas-slots.test.cjs` | 4 | `CalendarToSheet.gs` と `Shift.gs` を `vm` で読み込み（`Utilities.formatDate` などはスタブ）、予定を時間枠に割り当てる処理を検査: 刻みの境目からずれた予定、最後の枠、時間帯の外、先に入った予定の優先、日をまたぐ予定、刻みの推定、`Shift.gs` の 15 分枠 |
 | `tests/gas-menu.test.cjs` | 3 | `Shift.gs` の `onOpen` のメニュー項目と、使い方シートの「■ メニュー」・案内文・推奨ワークフローで示すメニュー名の一致 |
+| `tests/gas-config.test.cjs` | 2 | `CalendarToSheet.gs` を `vm` で読み込み（シートと UI はセルの値と背景色だけを持つ代わりのもの）、`createCalendarConfigSheet` が出力方法の行を残して見出しを 12 行目に書くこと、作成した設定シートで「1シートにまとめる」を選べること、古い設定シート（11 行目が見出し）を 12 行目から読み、完了ダイアログで作り直しを案内すること |
 
-- テストが対象にしない領域: DOM を伴う `render`、`saveDraft`、`importBoardFile` の分岐、IndexedDB、ポインター操作、PNG 出力、iframe の `sandbox`。`CalendarToSheet.gs` と `Shift.gs` は、時間枠の割り当て（`cts_eventSlotRange_`、`buildSlotData_`、`shift_eventSlotRange_`）だけを `tests/gas-slots.test.cjs` が検査する。
+- テストが対象にしない領域: DOM を伴う `render`、`saveDraft`、`importBoardFile` の分岐、IndexedDB、ポインター操作、PNG 出力、iframe の `sandbox`。`CalendarToSheet.gs` と `Shift.gs` は、時間枠の割り当て（`cts_eventSlotRange_`、`buildSlotData_`、`shift_eventSlotRange_`）を `tests/gas-slots.test.cjs` が、`CalendarToSheet.gs` の設定シートの作成と読み取りを `tests/gas-config.test.cjs` が検査する。
 
 ## 9. 既知の制約と資料との食い違い
 
@@ -587,7 +588,6 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 
 | 区分 | 内容 |
 | --- | --- |
-| 要確認 | `CalendarToSheet.gs` の `createCalendarConfigSheet` は、対象カレンダーの見出し行を `CTS_USER_START_ROW - 1`（11 行目）に書くが、11 行目は基本設定の「出力方法」の行でもある。作成直後の設定シートでは B11 が `メールアドレス` で上書きされ、`readCalendarConfig_` の出力方法の判定は常に「日付ごとに分ける」になる（「1シートにまとめる」を選べない）。直すには見出し行をずらす必要があり、既存の設定シートでは対象カレンダーの開始行（12 行目）も変わるため、今回は直していない。README に注意を書いた |
 | 要確認 | `CalendarToSheet.gs` で終日予定を「しない」にすると終日予定は出力されない（仕様どおり。見送り）。日をまたぐ予定は 2026-11-23 に直した（下の「修正済み（2026-11-23）」） |
 | 要確認 | `Shift.gs` の `空き時間抽出: 実シフト優先キーワード` は、組織名を含む `【作業】鹿島_SES` が既定値で、設定を空欄にしても既定値に戻る（`getOperationConfig_`）。別の組織で使う場合は明示的な書き換えが必要（利用者の組織向けの既定値のため変更しない。README に明記） |
 | 要確認 | `Shift.gs` のバックアップは書き込むだけで、復元する関数・メニューが無い。巻き戻しは `__シフトバックアップ` シートを手作業で参照する（見送り。README に明記） |
@@ -598,6 +598,12 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 | 本資料では扱わない | `Shift.gs` の次の領域は読んでいない、または概要のみ。`createSettingsSheet`（設定シートの初期レイアウト）、`createDocsSheet`（使い方シートの本文）、`extractFreeTimeCore_` の後半と `writeFreeTimeTablesToSettings`、`createTestSimulationSheet`、`createUserAttributesSheet`、`createWeeklyAssignmentSheet`、`updateSettingsTotals` の集計式、`autoAssignShifts` 内の日次ペア保証・月間目標上乗せ・単独禁止・飛び飛び整理・短い孤立解消の細部の条件（`canPairCell`、`canTopUpCell` など） |
 | 本資料では扱わない | `index.html` の CSS（8〜179 行）と、画面ごとのラベル・アイコン定義、シーケンス描画（`renderSequenceDiagram`）の座標の細部 |
 | 未検証 | `.gs` は Apps Script 上では実行していない（2026-10-22 の修正では、時刻の比較・ロックの復元計画・題名の無害化・取得失敗の集計・不足補填の判定などを、Apps Script の API をスタブにして `node:vm` で確認しただけで、リポジトリのテストには含めていない）。Google サービスの制限（実行時間、呼び出し回数）に対する実測も無い。`index.html` のブラウザ上の動作（警告帯の表示を含む）もこの資料では確認していない |
+
+### 修正済み（2026-11-24）
+
+| 修正前の食い違い | 修正後 |
+| --- | --- |
+| `CalendarToSheet.gs` の `createCalendarConfigSheet` が対象カレンダーの見出し行を 11 行目に書き、基本設定の「出力方法」の行を上書きしていた。作成直後の設定シートでは B11 が `メールアドレス` になり、「1シートにまとめる」を選べなかった | 見出し行を 12 行目、対象カレンダーを 13 行目からにした。A11 が `出力方法` で始まらない古い設定シートは、これまでどおり 12 行目から読んで日付ごとに分け、完了ダイアログで作り直しを案内する（既存の設定シートはそのまま使える）。`tests/gas-config.test.cjs`（2 件）。Apps Script の実機では未確認 |
 
 ### 修正済み（2026-11-23）
 
@@ -635,4 +641,4 @@ ID の無害化:           /[^a-zA-Z0-9_\-ぁ-んァ-ヶ一-龠]/g   （バッ�
 - [index.html](../index.html) — 業務フロー作成ツール本体
 - [CalendarToSheet.gs](../CalendarToSheet.gs) — カレンダー転記スクリプト
 - [Shift.gs](../Shift.gs) — シフト自動割当スクリプト
-- `tests/` — [flow-model.test.cjs](../tests/flow-model.test.cjs)、[sequence-model.test.cjs](../tests/sequence-model.test.cjs)、[sequence-render.test.cjs](../tests/sequence-render.test.cjs)、[gas-slots.test.cjs](../tests/gas-slots.test.cjs)、[gas-menu.test.cjs](../tests/gas-menu.test.cjs)
+- `tests/` — [flow-model.test.cjs](../tests/flow-model.test.cjs)、[sequence-model.test.cjs](../tests/sequence-model.test.cjs)、[sequence-render.test.cjs](../tests/sequence-render.test.cjs)、[gas-slots.test.cjs](../tests/gas-slots.test.cjs)、[gas-menu.test.cjs](../tests/gas-menu.test.cjs)、[gas-config.test.cjs](../tests/gas-config.test.cjs)
