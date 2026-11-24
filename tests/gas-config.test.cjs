@@ -104,3 +104,34 @@ test('CalendarToSheet: 以前の版で作った設定シート（11 行目が見
   assert.match(done[1], /出力方法の行がありません/);
   assert.match(done[1], /・対象: 2名/);
 });
+
+test('CalendarToSheet: 存在しない日付（11 月 31 日、うるう年でない 2 月 29 日、13 月）は翌月へ繰り越さずにエラーにする', () => {
+  const {context, ss, sheets, alerts} = load();
+  context.createCalendarConfigSheet();
+  const sheet = sheets.get('カレンダー設定');
+  const read = (start, end) => {
+    sheet.values.set('5,2', start);
+    sheet.values.set('6,2', end);
+    return context.readCalendarConfig_(ss);
+  };
+  for (const [start, end, label] of [['2026-11-31', '2026-12-05', '期間開始日'], ['2026-02-01', '2026-02-29', '期間終了日'], ['2026/13/01', '2026/13/02', '期間開始日']]) {
+    const cfg = read(start, end);
+    assert.ok(cfg.error, `${start}〜${end} が通った`);
+    assert.match(cfg.error, new RegExp(`「${label}」`));
+    assert.match(cfg.error, /存在しない日付/);
+  }
+  // 月末・うるう年の 2 月 29 日・年末は、そのまま使える。
+  let cfg = read('2028-02-29', '2028-03-01');
+  assert.equal(cfg.error, undefined);
+  assert.deepEqual([cfg.startDate.getMonth(), cfg.startDate.getDate(), cfg.endDate.getMonth(), cfg.endDate.getDate()], [1, 29, 2, 1]);
+  cfg = read('2026/12/31', '2027/1/1');
+  assert.equal(cfg.error, undefined);
+  assert.deepEqual(Array.from(context.eachDate_(cfg.startDate, cfg.endDate), d => d.getDate()), [31, 1]);
+  // 形式が違うものは、これまでどおり形式の案内を出す。
+  assert.match(read('来週', '2026-12-01').error, /yyyy-MM-dd 形式/);
+  // 取得の実行も、存在しない日付では始めない。
+  read('2026-11-31', '2026-12-01');
+  context.extractCalendarToSheet();
+  assert.equal(alerts.at(-1)[0], '設定エラー');
+  assert.match(alerts.at(-1)[1], /2026-11-31 は存在しない日付/);
+});
